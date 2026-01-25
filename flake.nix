@@ -69,9 +69,10 @@
         };
 
         # Nightly runner - installs from git main branch
+        # Requires bun for frontend compilation when building from source
         rustfava-nightly = pkgs.writeShellApplication {
           name = "rustfava";
-          runtimeInputs = [ pkgs.python313 pkgs.uv pkgs.wasmtime pkgs.git ];
+          runtimeInputs = [ pkgs.python313 pkgs.uv pkgs.wasmtime pkgs.git pkgs.bun ];
           text = ''
             RUSTFAVA_HOME="''${XDG_DATA_HOME:-$HOME/.local/share}/rustfava-nightly"
             VENV="$RUSTFAVA_HOME/venv"
