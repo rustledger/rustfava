@@ -1,35 +1,92 @@
 # Deployment
 
-There are a number of deployment options for persistently running rustfava on
-the Web, depending on your Web server and WSGI deployment choices. Below you
-can find some examples.
+There are several ways to deploy rustfava depending on your needs.
 
-## Apache with reverse proxy
+## Desktop App
 
-Apache configuration:
+For personal use, the [desktop app](https://github.com/rustledger/rustfava/releases) is the simplest option. It runs entirely locally with no server setup required.
 
-```apache
-ProxyPass "/rustfava" "http://localhost:5000/rustfava"
-```
+## Docker
 
-The above will make rustfava accessible at the `/rustfava` URL and proxy requests
-arriving there to a locally running rustfava. To make rustfava work properly in
-that context, you should run it using the `--prefix` command line option, like
-this:
+For server deployments, Docker is recommended:
 
 ```bash
-rustfava --prefix /rustfava /path/to/your/main.beancount
+docker run -p 5000:5000 -v /path/to/ledger:/data ghcr.io/rustledger/rustfava /data/main.beancount
 ```
 
-To have rustfava run automatically at boot and manageable as a system service
-you might want to define a systemd unit file for it, for example:
+For advanced Docker configurations (authentication, HTTPS, docker-compose), see the [Docker deployment guide](../contrib/docker/README.md).
+
+## Systemd Service
+
+To run rustfava as a system service on Linux:
 
 ```ini
+# /etc/systemd/system/rustfava.service
 [Unit]
-Description=Rustfava Web UI for Beancount
+Description=rustfava Web UI for Beancount
+After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/rustfava --host localhost --port 5000 --prefix /rustfava /path/to/your/main.beancount
+ExecStart=/usr/bin/rustfava --host 127.0.0.1 --port 5000 /path/to/main.beancount
 User=your-user
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
 ```
+
+Then:
+
+```bash
+sudo systemctl enable rustfava
+sudo systemctl start rustfava
+```
+
+## Reverse Proxy
+
+### Apache
+
+```apache
+ProxyPass "/rustfava" "http://localhost:5000/rustfava"
+ProxyPassReverse "/rustfava" "http://localhost:5000/rustfava"
+```
+
+Run rustfava with the `--prefix` option:
+
+```bash
+rustfava --prefix /rustfava /path/to/main.beancount
+```
+
+### Nginx
+
+```nginx
+location /rustfava/ {
+    proxy_pass http://127.0.0.1:5000/rustfava/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+### Caddy
+
+```
+your-domain.com {
+    reverse_proxy localhost:5000
+}
+```
+
+Caddy automatically handles HTTPS with Let's Encrypt.
+
+## Security Considerations
+
+When exposing rustfava to the internet:
+
+1. **Use HTTPS** - Never expose plain HTTP to the public internet
+2. **Add authentication** - Use a reverse proxy with OAuth2 or basic auth
+3. **Restrict access** - Use firewall rules to limit access to trusted IPs
+4. **Keep updated** - Regularly update rustfava for security patches
+
+See [SECURITY.md](../SECURITY.md) for more security best practices.

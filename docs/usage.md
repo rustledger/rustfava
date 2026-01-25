@@ -13,41 +13,72 @@ page.
 
 ## Installation
 
-Rustfava runs on macOS, Linux, and Windows. You will need
-[Python 3](https://www.python.org/downloads/) and
+### Option 1: Desktop App (Recommended)
+
+Download the desktop app from [GitHub Releases](https://github.com/rustledger/rustfava/releases):
+
+| Platform | Download |
+|----------|----------|
+| **macOS** | `rustfava_x.x.x_aarch64.dmg` |
+| **Windows** | `rustfava_x.x.x_x64-setup.exe` |
+| **Linux** | `rustfava_x.x.x_amd64.AppImage` |
+
+Double-click to launch, then open your `.beancount` file. No Python or other dependencies required.
+
+### Option 2: Command Line (PyPI)
+
+rustfava runs on macOS, Linux, and Windows. You will need
+[Python 3.13+](https://www.python.org/downloads/) and
 [uv](https://docs.astral.sh/uv/).
 
-Then you can install rustfava or update your existing installation by running:
-
 ```bash
-uv pip install --upgrade rustfava
+uv tool install rustfava
 ```
 
-Rustfava uses [rustledger](https://github.com/rustledger/rustledger), a
+Or to install into a virtual environment:
+
+```bash
+uv pip install rustfava
+```
+
+rustfava uses [rustledger](https://github.com/rustledger/rustledger), a
 Rust-based parser compiled to WebAssembly, to parse your Beancount files. No
 separate Beancount installation is required.
 
-If you want to export query results to Microsoft Excel or LibreOffice Calc, use
-the following command to install the optional dependencies for this feature:
+To export query results to Microsoft Excel or LibreOffice Calc:
 
 ```bash
-uv pip install --upgrade rustfava[excel]
+uv tool install rustfava[excel]
 ```
 
-## Starting Rustfava
+### Option 3: Docker
 
-After installing rustfava, you can start it by running:
+```bash
+docker run -p 5000:5000 -v /path/to/ledger:/data ghcr.io/rustledger/rustfava /data/main.beancount
+```
+
+See [Docker deployment](../contrib/docker/README.md) for advanced options.
+
+## Starting rustfava
+
+### Desktop App
+
+1. Launch the app
+2. Click "Open File" or use File → Open
+3. Select your `.beancount` file
+
+### Command Line
 
 ```bash
 rustfava ledger.beancount
 ```
 
-pointing it to your Beancount file -- and visit the web interface at
-[http://localhost:5000](http://localhost:5000).
+Then visit [http://localhost:5000](http://localhost:5000).
 
-There are some command-line options available, run `rustfava --help` for an
-overview.
+Run `rustfava --help` for available options.
 
-For more information on rustfava's features, refer to the help pages that are
-available through rustfava's web-interface. Rustfava comes with Gmail-style
-keyboard shortcuts; press `?` to show an overview.
+## Using rustfava
+
+For more information on rustfava's features, refer to the help pages available
+through rustfava's web interface. rustfava comes with Gmail-style keyboard
+shortcuts; press `?` to show an overview.
