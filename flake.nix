@@ -91,10 +91,44 @@
           '';
         };
 
+        # Desktop app runner for NixOS
+        # Downloads AppImage from releases and wraps with rustfava in PATH
+        rustfava-desktop = pkgs.writeShellApplication {
+          name = "rustfava-desktop";
+          runtimeInputs = [ rustfava pkgs.appimage-run pkgs.curl pkgs.jq ];
+          text = ''
+            RUSTFAVA_HOME="''${XDG_DATA_HOME:-$HOME/.local/share}/rustfava"
+            APPIMAGE="$RUSTFAVA_HOME/rustfava-desktop.AppImage"
+
+            # Check for updates and download AppImage if needed
+            if [ ! -f "$APPIMAGE" ]; then
+              echo "Downloading rustfava desktop app..."
+              mkdir -p "$RUSTFAVA_HOME"
+
+              # Get latest release AppImage URL
+              RELEASE_URL=$(curl -s https://api.github.com/repos/rustledger/rustfava/releases/latest \
+                | jq -r '.assets[] | select(.name | endswith(".AppImage")) | .browser_download_url')
+
+              if [ -z "$RELEASE_URL" ] || [ "$RELEASE_URL" = "null" ]; then
+                echo "Error: No AppImage found in latest release."
+                echo "The desktop app may not be released yet. Try running 'nix run .#default' for the CLI."
+                exit 1
+              fi
+
+              curl -L -o "$APPIMAGE" "$RELEASE_URL"
+              chmod +x "$APPIMAGE"
+            fi
+
+            # Run the AppImage with rustfava in PATH (for PATH fallback feature)
+            exec appimage-run "$APPIMAGE" "$@"
+          '';
+        };
+
       in {
         packages = {
           default = rustfava;
           nightly = rustfava-nightly;
+          desktop = rustfava-desktop;
         };
 
         apps = {
@@ -105,6 +139,10 @@
           nightly = {
             type = "app";
             program = "${rustfava-nightly}/bin/rustfava";
+          };
+          desktop = {
+            type = "app";
+            program = "${rustfava-desktop}/bin/rustfava-desktop";
           };
         };
 
