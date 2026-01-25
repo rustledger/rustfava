@@ -24,7 +24,7 @@ SUPPORTED_API_VERSION = "1."
 RUSTLEDGER_VERSION = "v0.7.0"
 RUSTLEDGER_WASM_URL = (
     f"https://github.com/rustledger/rustledger/releases/download/"
-    f"{RUSTLEDGER_VERSION}/rustledger-ffi-wasi.wasm"
+    f"{RUSTLEDGER_VERSION}/rustledger-ffi-wasi-{RUSTLEDGER_VERSION}.wasm"
 )
 
 
