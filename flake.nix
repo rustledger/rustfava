@@ -49,7 +49,7 @@
           build
         ]);
 
-        # Rustfava runner script - installs via uv on first run
+        # Rustfava runner script - installs via uv on first run (stable from PyPI)
         rustfava = pkgs.writeShellApplication {
           name = "rustfava";
           runtimeInputs = [ pkgs.python313 pkgs.uv pkgs.wasmtime ];
@@ -68,12 +68,40 @@
           '';
         };
 
-      in {
-        packages.default = rustfava;
+        # Nightly runner - installs from git main branch
+        rustfava-nightly = pkgs.writeShellApplication {
+          name = "rustfava";
+          runtimeInputs = [ pkgs.python313 pkgs.uv pkgs.wasmtime pkgs.git ];
+          text = ''
+            RUSTFAVA_HOME="''${XDG_DATA_HOME:-$HOME/.local/share}/rustfava-nightly"
+            VENV="$RUSTFAVA_HOME/venv"
 
-        apps.default = {
-          type = "app";
-          program = "${rustfava}/bin/rustfava";
+            if [ ! -f "$VENV/bin/rustfava" ]; then
+              echo "Installing rustfava (nightly from main branch)..."
+              mkdir -p "$RUSTFAVA_HOME"
+              uv venv "$VENV" --python ${pkgs.python313}/bin/python
+              uv pip install --python "$VENV/bin/python" "git+https://github.com/rustledger/rustfava.git"
+            fi
+
+            exec "$VENV/bin/rustfava" "$@"
+          '';
+        };
+
+      in {
+        packages = {
+          default = rustfava;
+          nightly = rustfava-nightly;
+        };
+
+        apps = {
+          default = {
+            type = "app";
+            program = "${rustfava}/bin/rustfava";
+          };
+          nightly = {
+            type = "app";
+            program = "${rustfava-nightly}/bin/rustfava";
+          };
         };
 
         devShells.default = pkgs.mkShell {
