@@ -93,9 +93,9 @@
 
         # Desktop app runner for NixOS
         # Downloads AppImage from releases and wraps with rustfava in PATH
-        rustfava-desktop = pkgs.writeShellApplication {
-          name = "rustfava-desktop";
-          runtimeInputs = [ rustfava pkgs.appimage-run pkgs.curl pkgs.jq ];
+        mkDesktopApp = { name, rustfavaPkg }: pkgs.writeShellApplication {
+          inherit name;
+          runtimeInputs = [ rustfavaPkg pkgs.appimage-run pkgs.curl pkgs.jq ];
           text = ''
             RUSTFAVA_HOME="''${XDG_DATA_HOME:-$HOME/.local/share}/rustfava"
             APPIMAGE="$RUSTFAVA_HOME/rustfava-desktop.AppImage"
@@ -124,11 +124,15 @@
           '';
         };
 
+        rustfava-desktop = mkDesktopApp { name = "rustfava-desktop"; rustfavaPkg = rustfava; };
+        rustfava-desktop-nightly = mkDesktopApp { name = "rustfava-desktop"; rustfavaPkg = rustfava-nightly; };
+
       in {
         packages = {
           default = rustfava;
           nightly = rustfava-nightly;
           desktop = rustfava-desktop;
+          desktop-nightly = rustfava-desktop-nightly;
         };
 
         apps = {
@@ -143,6 +147,10 @@
           desktop = {
             type = "app";
             program = "${rustfava-desktop}/bin/rustfava-desktop";
+          };
+          desktop-nightly = {
+            type = "app";
+            program = "${rustfava-desktop-nightly}/bin/rustfava-desktop";
           };
         };
 
