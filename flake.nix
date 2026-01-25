@@ -6,15 +6,20 @@
     flake-utils.url = "github:numtide/flake-utils";
     rust-overlay.url = "github:oxalica/rust-overlay";
     rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+    nixgl.url = "github:nix-community/nixGL";
+    nixgl.inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  outputs = { self, nixpkgs, flake-utils, rust-overlay }:
+  outputs = { self, nixpkgs, flake-utils, rust-overlay, nixgl }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs {
           inherit system;
           overlays = [ rust-overlay.overlays.default ];
         };
+
+        # nixGL for GPU driver compatibility (Linux only)
+        nixglPkg = if pkgs.stdenv.isLinux then nixgl.packages.${system}.nixGLIntel else null;
 
         # Rust toolchain with WASM target
         rustToolchain = pkgs.rust-bin.stable.latest.default.override {
@@ -95,7 +100,8 @@
         # Downloads AppImage from releases and wraps with rustfava in PATH
         mkDesktopApp = { name, rustfavaPkg }: pkgs.writeShellApplication {
           inherit name;
-          runtimeInputs = [ rustfavaPkg pkgs.appimage-run pkgs.curl pkgs.jq ];
+          runtimeInputs = [ rustfavaPkg pkgs.appimage-run pkgs.curl pkgs.jq ]
+            ++ pkgs.lib.optional (nixglPkg != null) nixglPkg;
           text = ''
             RUSTFAVA_HOME="''${XDG_DATA_HOME:-$HOME/.local/share}/rustfava"
             APPIMAGE="$RUSTFAVA_HOME/rustfava-desktop.AppImage"
@@ -119,16 +125,112 @@
               chmod +x "$APPIMAGE"
             fi
 
-            # Disable WebKitGTK compositing to avoid EGL issues on NixOS
-            export WEBKIT_DISABLE_COMPOSITING_MODE=1
-
-            # Run the AppImage with rustfava in PATH (for PATH fallback feature)
-            exec appimage-run "$APPIMAGE" "$@"
+            # Run the AppImage with nixGL for GPU driver compatibility on NixOS
+            if command -v nixGLIntel &> /dev/null; then
+              exec nixGLIntel appimage-run "$APPIMAGE" "$@"
+            else
+              exec appimage-run "$APPIMAGE" "$@"
+            fi
           '';
         };
 
         rustfava-desktop = mkDesktopApp { name = "rustfava-desktop"; rustfavaPkg = rustfava; };
         rustfava-desktop-nightly = mkDesktopApp { name = "rustfava-desktop"; rustfavaPkg = rustfava-nightly; };
+
+        # Native desktop app - builds from source on first run
+        # Uses system WebKitGTK to avoid EGL issues with AppImage
+        rustfava-desktop-native = pkgs.writeShellApplication {
+          name = "rustfava-desktop";
+          runtimeInputs = [
+            rustfava
+            rustToolchain
+            pkgs.pkg-config
+            pkgs.bun
+            pkgs.git
+            pkgs.gcc  # C compiler for cargo build
+            # GTK/Tauri deps
+            pkgs.openssl
+            pkgs.webkitgtk_4_1
+            pkgs.libsoup_3
+            pkgs.glib-networking
+            pkgs.librsvg
+            pkgs.gsettings-desktop-schemas
+            pkgs.gtk3
+            pkgs.glib
+            pkgs.gdk-pixbuf
+            pkgs.cairo
+            pkgs.pango
+            pkgs.atk
+            pkgs.harfbuzz
+            pkgs.zlib
+          ];
+          text = let
+            # Build PKG_CONFIG_PATH for all GTK dependencies
+            pkgConfigPath = pkgs.lib.makeSearchPath "lib/pkgconfig" [
+              pkgs.glib.dev
+              pkgs.gtk3.dev
+              pkgs.webkitgtk_4_1.dev
+              pkgs.libsoup_3.dev
+              pkgs.gdk-pixbuf.dev
+              pkgs.cairo.dev
+              pkgs.pango.dev
+              pkgs.atk.dev
+              pkgs.harfbuzz.dev
+              pkgs.openssl.dev
+              pkgs.zlib.dev
+            ];
+            # Library path for linker
+            libraryPath = pkgs.lib.makeLibraryPath [
+              pkgs.zlib
+            ];
+          in ''
+            RUSTFAVA_HOME="''${XDG_DATA_HOME:-$HOME/.local/share}/rustfava"
+            DESKTOP_BUILD="$RUSTFAVA_HOME/desktop-native"
+            BINARY="$DESKTOP_BUILD/desktop/src-tauri/target/release/rustfava-desktop"
+
+            # Build from source on first run
+            if [ ! -f "$BINARY" ]; then
+              echo "Building rustfava desktop (native)..."
+              mkdir -p "$RUSTFAVA_HOME"
+
+              # Set up build environment
+              export PKG_CONFIG_PATH="${pkgConfigPath}"
+              export LIBRARY_PATH="${libraryPath}''${LIBRARY_PATH:+:$LIBRARY_PATH}"
+
+              # Clone or update repo
+              if [ ! -d "$DESKTOP_BUILD/.git" ]; then
+                git clone --depth 1 https://github.com/rustledger/rustfava.git "$DESKTOP_BUILD"
+              fi
+
+              cd "$DESKTOP_BUILD/desktop"
+
+              # Build frontend
+              bun install
+              bun run build
+
+              # Create dummy sidecars (we use PATH fallback)
+              mkdir -p src-tauri/binaries
+              RUST_TARGET=$(rustc -vV | grep host | cut -d' ' -f2)
+              for bin in rustfava-server bean-check bean-doctor bean-extract bean-format bean-price bean-query bean-report rledger; do
+                touch "src-tauri/binaries/$bin-$RUST_TARGET"
+                chmod +x "src-tauri/binaries/$bin-$RUST_TARGET"
+              done
+
+              # Build Tauri
+              cd src-tauri
+              cargo build --release
+
+              # Remove dummy sidecars so Tauri uses PATH fallback at runtime
+              rm -rf binaries
+            fi
+
+            # Set up GTK environment
+            export GIO_MODULE_DIR="${pkgs.glib-networking}/lib/gio/modules"
+            export XDG_DATA_DIRS="${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}:${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}:''${XDG_DATA_DIRS:-}"
+
+            exec "$BINARY" "$@"
+          '';
+        };
 
       in {
         packages = {
@@ -136,6 +238,7 @@
           nightly = rustfava-nightly;
           desktop = rustfava-desktop;
           desktop-nightly = rustfava-desktop-nightly;
+          desktop-native = rustfava-desktop-native;
         };
 
         apps = {
@@ -154,6 +257,10 @@
           desktop-nightly = {
             type = "app";
             program = "${rustfava-desktop-nightly}/bin/rustfava-desktop";
+          };
+          desktop-native = {
+            type = "app";
+            program = "${rustfava-desktop-native}/bin/rustfava-desktop";
           };
         };
 
