@@ -144,7 +144,13 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Build rustledger CLI binaries
-        run: cargo build --release --target ${{ matrix.target }}
+        shell: bash
+        run: |
+          # macOS: Use classic linker to avoid Xcode 15 crashes on long symbol names
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            export RUSTFLAGS="-C link-arg=-Wl,-ld_classic"
+          fi
+          cargo build --release --target ${{ matrix.target }}
 
       - name: Prepare binaries (Unix)
         if: runner.os != 'Windows'
