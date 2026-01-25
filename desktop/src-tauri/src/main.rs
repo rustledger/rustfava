@@ -39,8 +39,8 @@ fn get_example_file_path(app: AppHandle) -> Result<String, String> {
     let resource_dir = app.path().resource_dir()
         .map_err(|e| format!("Failed to get resource dir: {}", e))?;
 
-    // Try bundled resource first
-    let bundled_path = resource_dir.join("examples").join("example.beancount");
+    // Try bundled resource first (copied to resources root by Tauri)
+    let bundled_path = resource_dir.join("example.beancount");
     if bundled_path.exists() {
         return Ok(bundled_path.to_string_lossy().to_string());
     }
