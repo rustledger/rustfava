@@ -48,6 +48,7 @@ jobs:
 
       - name: Get latest rustledger tag
         id: rustledger-tag
+        shell: bash
         run: |
           TAG=$(git ls-remote --tags --sort=-v:refname https://github.com/${{ env.RUSTLEDGER_REPO }}.git "v*" | head -1 | sed 's/.*refs\/tags\///' | sed 's/\^{}//')
           echo "tag=$TAG" >> $GITHUB_OUTPUT
@@ -73,6 +74,9 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: '3.13'
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
 
       - name: Install Python dependencies
         run: |
