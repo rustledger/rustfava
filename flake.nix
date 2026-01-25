@@ -119,6 +119,9 @@
               chmod +x "$APPIMAGE"
             fi
 
+            # Disable WebKitGTK compositing to avoid EGL issues on NixOS
+            export WEBKIT_DISABLE_COMPOSITING_MODE=1
+
             # Run the AppImage with rustfava in PATH (for PATH fallback feature)
             exec appimage-run "$APPIMAGE" "$@"
           '';
