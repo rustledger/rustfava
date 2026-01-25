@@ -13,6 +13,11 @@
           "name": "binaries/rustfava-server",
           "sidecar": true,
           "args": true
+        },
+        {
+          "name": "rustfava",
+          "cmd": "rustfava",
+          "args": true
         }
       ]
     },
