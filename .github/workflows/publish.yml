@@ -1,4 +1,20 @@
-name: Build and publish (PyPI + Docker on tags)
+# Build and Publish Workflow
+# =========================
+# Triggered on tags to publish to multiple distribution channels:
+#
+# | Channel | Registry/URL                           |
+# |---------|----------------------------------------|
+# | PyPI    | pypi.org/project/rustfava             |
+# | Docker  | ghcr.io/rustledger/rustfava           |
+# | COPR    | copr.fedorainfracloud.org/robcohen    |
+#
+# SECRETS REQUIRED
+# ----------------
+# - COPR_LOGIN / COPR_TOKEN: COPR build trigger
+# - (PyPI uses OIDC trusted publishing, no token needed)
+# - (Docker uses GITHUB_TOKEN)
+#
+name: Build and publish (PyPI + Docker + COPR on tags)
 
 on:
   workflow_dispatch:
@@ -104,3 +120,32 @@ jobs:
             ghcr.io/${{ github.repository }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # Trigger COPR build for Fedora/RHEL
+  copr:
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: publish  # Wait for PyPI publish so source is available
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Install copr-cli
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pip
+          pip3 install copr-cli
+      - name: Configure COPR
+        run: |
+          mkdir -p ~/.config
+          cat > ~/.config/copr << EOF
+          [copr-cli]
+          login = ${{ secrets.COPR_LOGIN }}
+          username = robcohen
+          token = ${{ secrets.COPR_TOKEN }}
+          copr_url = https://copr.fedorainfracloud.org
+          EOF
+      - name: Trigger SCM build
+        run: |
+          # Trigger a build using COPR's PyPI integration
+          copr-cli build-package robcohen/rustfava \
+            --name rustfava \
+            --nowait || true
