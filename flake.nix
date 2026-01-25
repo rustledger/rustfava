@@ -49,7 +49,33 @@
           build
         ]);
 
+        # Rustfava runner script - installs via uv on first run
+        rustfava = pkgs.writeShellApplication {
+          name = "rustfava";
+          runtimeInputs = [ pkgs.python313 pkgs.uv pkgs.wasmtime ];
+          text = ''
+            RUSTFAVA_HOME="''${XDG_DATA_HOME:-$HOME/.local/share}/rustfava"
+            VENV="$RUSTFAVA_HOME/venv"
+
+            if [ ! -f "$VENV/bin/rustfava" ]; then
+              echo "Installing rustfava..."
+              mkdir -p "$RUSTFAVA_HOME"
+              uv venv "$VENV" --python ${pkgs.python313}/bin/python
+              uv pip install --python "$VENV/bin/python" rustfava
+            fi
+
+            exec "$VENV/bin/rustfava" "$@"
+          '';
+        };
+
       in {
+        packages.default = rustfava;
+
+        apps.default = {
+          type = "app";
+          program = "${rustfava}/bin/rustfava";
+        };
+
         devShells.default = pkgs.mkShell {
           packages = [
             pythonEnv
