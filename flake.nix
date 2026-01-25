@@ -81,7 +81,10 @@
               echo "Installing rustfava (nightly from main branch)..."
               mkdir -p "$RUSTFAVA_HOME"
               uv venv "$VENV" --python ${pkgs.python313}/bin/python
-              uv pip install --python "$VENV/bin/python" "git+https://github.com/rustledger/rustfava.git"
+              # Install build dependencies first (needed for --no-build-isolation)
+              uv pip install --python "$VENV/bin/python" setuptools setuptools_scm Babel wheel
+              # --no-build-isolation ensures bun is available during frontend compilation
+              uv pip install --python "$VENV/bin/python" --no-build-isolation "git+https://github.com/rustledger/rustfava.git"
             fi
 
             exec "$VENV/bin/rustfava" "$@"
