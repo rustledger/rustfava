@@ -8,6 +8,8 @@ This is a fork of [Fava](https://github.com/beancount/fava) that replaces the
 Python beancount parser with rustledger, compiled to WebAssembly for faster
 parsing and processing.
 
+![rustfava dashboard](docs/screenshot.png)
+
 ## Getting Started
 
 ### Option 1: Desktop App (Recommended)
