@@ -115,16 +115,8 @@ fn open_file(
     // Find a free port
     let port = find_free_port();
 
-    // Spawn the sidecar binary
-    let sidecar = app
-        .shell()
-        .sidecar("rustfava-server")
-        .map_err(|e| format!("Failed to create sidecar command: {}", e))?
-        .args([&path, "-p", &port.to_string()]);
-
-    let (mut _rx, child) = sidecar
-        .spawn()
-        .map_err(|e| format!("Failed to spawn sidecar: {}", e))?;
+    // Try sidecar first (bundled releases), then fall back to PATH (NixOS/system install)
+    let child = spawn_rustfava_server(&app, &path, port)?;
 
     // Generate tab ID and store
     let tab_id = generate_id(&state, "tab");
@@ -145,6 +137,29 @@ fn open_file(
         "path": path,
         "already_open": false
     }))
+}
+
+/// Spawn rustfava server - tries sidecar first, then falls back to PATH
+fn spawn_rustfava_server(app: &AppHandle, path: &str, port: u16) -> Result<CommandChild, String> {
+    // Try bundled sidecar first (for AppImage/DMG/MSI releases)
+    if let Ok(sidecar) = app.shell().sidecar("rustfava-server") {
+        if let Ok((_, child)) = sidecar.args([path, "-p", &port.to_string()]).spawn() {
+            return Ok(child);
+        }
+    }
+
+    // Fall back to rustfava from PATH (for NixOS/system installs)
+    // This allows the desktop app to work when rustfava CLI is installed separately
+    let command = app
+        .shell()
+        .command("rustfava")
+        .args([path, "-p", &port.to_string()]);
+
+    let (_, child) = command
+        .spawn()
+        .map_err(|e| format!("Failed to spawn rustfava: {}. Make sure rustfava is installed and in PATH.", e))?;
+
+    Ok(child)
 }
 
 /// Close a tab and kill its server
