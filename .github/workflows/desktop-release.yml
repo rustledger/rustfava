@@ -14,12 +14,20 @@ on:
   repository_dispatch:
     types: [rustledger-release]
 
+permissions:
+  contents: write
+
 env:
   CARGO_TERM_COLOR: always
   RUSTLEDGER_REPO: rustledger/rustledger
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build-sidecar:
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -39,10 +47,12 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7 # stable
         with:
           targets: wasm32-wasip1
 
@@ -71,12 +81,12 @@ jobs:
           copy target\wasm32-wasip1\release\rustledger-ffi-wasi.wasm ${{ github.workspace }}\src\rustfava\rustledger\rustledger-wasi.wasm
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: '3.13'
 
       - name: Install Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2
 
       - name: Install Python dependencies
         run: |
@@ -99,12 +109,13 @@ jobs:
           move dist\rustfava.exe dist\${{ matrix.sidecar_name }}
 
       - name: Upload sidecar artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: sidecar-${{ matrix.target }}
           path: dist/${{ matrix.sidecar_name }}
 
   build-rustledger:
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -133,13 +144,14 @@ jobs:
           echo "Using rustledger $TAG"
 
       - name: Checkout rustledger
-        uses: actions/checkout@v6
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           repository: ${{ env.RUSTLEDGER_REPO }}
           ref: ${{ steps.rustledger-tag.outputs.tag }}
+          persist-credentials: false
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7 # stable
         with:
           targets: ${{ matrix.target }}
 
@@ -178,13 +190,14 @@ jobs:
           }
 
       - name: Upload rustledger binaries
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: rustledger-${{ matrix.target }}
           path: binaries/*
 
   build-tauri:
     needs: [build-sidecar, build-rustledger]
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -204,16 +217,18 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          persist-credentials: false
 
       - name: Download sidecar artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: sidecar-${{ matrix.target }}
           path: desktop/src-tauri/binaries/
 
       - name: Download rustledger binaries
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: rustledger-${{ matrix.target }}
           path: desktop/src-tauri/binaries/
@@ -235,24 +250,24 @@ jobs:
             libayatana-appindicator3-dev
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7 # stable
         with:
           targets: ${{ matrix.target }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
           node-version: '20'
 
       - name: Install Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2
 
       - name: Install frontend dependencies
         working-directory: desktop
         run: bun install
 
       - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@79c624843491f12ae9d63592534ed49df3bc4adb # v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -261,7 +276,7 @@ jobs:
           args: --target ${{ matrix.target }}
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: rustfava-${{ matrix.target }}
           path: |
@@ -276,12 +291,11 @@ jobs:
   release:
     needs: build-tauri
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     if: startsWith(github.ref, 'refs/tags/')
-    permissions:
-      contents: write
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           path: artifacts
           pattern: rustfava-*
@@ -291,7 +305,7 @@ jobs:
         run: find artifacts -type f
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
         with:
           files: |
             artifacts/**/*.deb
