@@ -148,16 +148,16 @@ fn spawn_rustfava_server(app: &AppHandle, path: &str, port: u16) -> Result<Comma
         }
     }
 
-    // Fall back to rustfava from PATH (for NixOS/system installs)
-    // This allows the desktop app to work when rustfava CLI is installed separately
+    // Fall back to rustfava-server from PATH (for NixOS flake installs)
+    // The flake creates symlinks without the target triple suffix
     let command = app
         .shell()
-        .command("rustfava")
+        .command("rustfava-server")
         .args([path, "-p", &port.to_string()]);
 
     let (_, child) = command
         .spawn()
-        .map_err(|e| format!("Failed to spawn rustfava: {}. Make sure rustfava is installed and in PATH.", e))?;
+        .map_err(|e| format!("Failed to spawn rustfava-server: {}. Make sure the desktop app is properly installed.", e))?;
 
     Ok(child)
 }
