@@ -94,7 +94,8 @@ jobs:
           pip install pyinstaller
           # Install build dependencies first (custom build backend requires these)
           pip install "setuptools>=80" "setuptools_scm>=8" "Babel>=2.7,<3" wheel
-          pip install --no-build-isolation -e .
+          # Use non-editable install - pip checks backend before --no-build-isolation takes effect
+          pip install --no-build-isolation .
 
       - name: Build sidecar with PyInstaller
         run: |
