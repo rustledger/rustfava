@@ -76,6 +76,19 @@
             mkdir -p $out
             cp -r bin lib $out/
 
+            # Create symlinks without target triple suffix for PATH lookup
+            # The desktop app falls back to these when sidecar lookup fails
+            for bin in $out/bin/*-${targetTriple}*; do
+              if [ -f "$bin" ]; then
+                base=$(basename "$bin" | sed "s/-${targetTriple}//")
+                ln -sf "$(basename "$bin")" "$out/bin/$base"
+              fi
+            done
+
+            # Create rustfava -> rustfava-server symlink for backwards compatibility
+            # Old releases look for 'rustfava' in PATH as fallback
+            ln -sf "rustfava-server-${targetTriple}" "$out/bin/rustfava"
+
             # Wrap all binaries with wasmtime in PATH and GTK settings
             for bin in $out/bin/*; do
               if [ -f "$bin" ] && [ -x "$bin" ]; then

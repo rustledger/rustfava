@@ -31,7 +31,7 @@ if static_dir.exists():
     for f in static_dir.rglob("*"):
         if f.is_file():
             rel_path = f.relative_to(rustfava_dir)
-            datas.append((str(f), str(rel_path.parent)))
+            datas.append((str(f), f"rustfava/{rel_path.parent}"))
 
 # Templates
 templates_dir = rustfava_dir / "templates"
@@ -39,14 +39,14 @@ if templates_dir.exists():
     for f in templates_dir.rglob("*"):
         if f.is_file():
             rel_path = f.relative_to(rustfava_dir)
-            datas.append((str(f), str(rel_path.parent)))
+            datas.append((str(f), f"rustfava/{rel_path.parent}"))
 
 # Translations (.mo files)
 translations_dir = rustfava_dir / "translations"
 if translations_dir.exists():
     for f in translations_dir.rglob("*.mo"):
         rel_path = f.relative_to(rustfava_dir)
-        datas.append((str(f), str(rel_path.parent)))
+        datas.append((str(f), f"rustfava/{rel_path.parent}"))
 
 # WASM file for rustledger
 wasm_file = rustfava_dir / "rustledger" / "rustledger-wasi.wasm"
@@ -59,7 +59,7 @@ if help_dir.exists():
     for f in help_dir.rglob("*"):
         if f.is_file():
             rel_path = f.relative_to(rustfava_dir)
-            datas.append((str(f), str(rel_path.parent)))
+            datas.append((str(f), f"rustfava/{rel_path.parent}"))
 
 # Hidden imports
 hiddenimports = [
