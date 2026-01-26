@@ -86,19 +86,37 @@ jobs:
         uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2
 
       - name: Install Python dependencies
+        shell: bash
         run: |
           python -m pip install --upgrade pip
           pip install pyinstaller
-          # Install build dependencies (custom build backend requires these)
-          pip install "setuptools>=80" "setuptools_scm>=8" "Babel>=2.7,<3" wheel
-          # Install runtime dependencies manually (avoids build backend import issues)
+          # Install runtime dependencies only (no rustfava install needed)
           pip install "Flask>=2.2,<4" "Flask-Babel>=3,<5" "Jinja2>=3,<4" "Werkzeug>=2.2,<4" \
             "beangulp>=0.1" "cheroot>=8,<12" "click>=7,<9" "markdown2>=2.3.0,<3" \
-            "ply>=3.11" "pydantic>=2.0" "watchfiles>=0.20.0" "beancount>=2,<4"
-          # Install rustfava without deps (they're already installed)
-          pip install --no-build-isolation --no-deps .
+            "ply>=3.11" "pydantic>=2.0" "watchfiles>=0.20.0" "beancount>=2,<4" \
+            "Babel>=2.7,<3"
+
+      - name: Build frontend assets
+        shell: bash
+        run: |
+          cd frontend && bun install && bun run build
+
+      - name: Compile translations
+        shell: bash
+        run: |
+          python -c "
+          from pathlib import Path
+          from babel.messages.mofile import write_mo
+          from babel.messages.pofile import read_po
+          for po in Path('src/rustfava/translations').glob('**/messages.po'):
+              mo = po.parent / 'messages.mo'
+              catalog = read_po(po.open('rb'), po.parts[-3])
+              write_mo(mo.open('wb'), catalog)
+              print(f'Compiled {po} -> {mo}')
+          "
 
       - name: Build sidecar with PyInstaller
+        shell: bash
         run: |
           pyinstaller contrib/pyinstaller_spec.spec --noconfirm
 
@@ -243,6 +261,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@b3b07ba8b418998c39fb20f53e8b695cdcc8de1b # stable
         with:
+          toolchain: stable
           targets: ${{ matrix.target }}
 
       - name: Rust cache
@@ -256,8 +275,6 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: desktop/package-lock.json
 
       - name: Install Bun
         uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2

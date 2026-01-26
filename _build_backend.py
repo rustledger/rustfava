@@ -9,8 +9,6 @@ from os import walk
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from babel.messages.mofile import write_mo
-from babel.messages.pofile import read_po
 from setuptools import build_meta
 from setuptools.build_meta import get_requires_for_build_editable
 from setuptools.build_meta import get_requires_for_build_sdist
@@ -69,6 +67,10 @@ def _compile_frontend() -> None:
 
 def _compile_translations() -> None:
     """Compile the translations from .po to .mo (if changed or missing)."""
+    # Lazy import to avoid requiring Babel for metadata preparation
+    from babel.messages.mofile import write_mo
+    from babel.messages.pofile import read_po
+
     for source in Path().glob("src/rustfava/translations/**/messages.po"):
         target = source.parent / "messages.mo"
         if (

@@ -1,27 +1,75 @@
 # vim: set ft=python:
-"""Pyinstaller spec file for building a binary from rustfava's cli.py"""
+"""Pyinstaller spec file for building a binary from rustfava's cli.py
+
+This spec works without pip installing rustfava - it uses the source directly.
+"""
 
 from __future__ import annotations
 
 import os
+import sys
+from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_data_files
 from PyInstaller.utils.hooks import collect_submodules
-from PyInstaller.utils.hooks import copy_metadata
 
-# Data files and version info for rustfava:
-datas = collect_data_files("rustfava") + copy_metadata("rustfava")
+# Get the project root (parent of contrib/)
+spec_dir = Path(SPECPATH)
+project_root = spec_dir.parent
+src_dir = project_root / "src"
+rustfava_dir = src_dir / "rustfava"
 
-# Explicitly include the rustledger WASM file
-# This ensures it's bundled even if collect_data_files misses it
-import rustfava
-rustfava_dir = os.path.dirname(rustfava.__file__)
-wasm_file = os.path.join(rustfava_dir, "rustledger", "rustledger-wasi.wasm")
-if os.path.exists(wasm_file):
-    datas.append((wasm_file, "rustfava/rustledger"))
+# Add src/ to path so PyInstaller can find rustfava
+sys.path.insert(0, str(src_dir))
 
-# Hidden imports for rustledger
-hiddenimports = []
+# Collect data files from source directory
+datas = []
+
+# Static files (CSS, JS, etc.)
+static_dir = rustfava_dir / "static"
+if static_dir.exists():
+    for f in static_dir.rglob("*"):
+        if f.is_file():
+            rel_path = f.relative_to(rustfava_dir)
+            datas.append((str(f), str(rel_path.parent)))
+
+# Templates
+templates_dir = rustfava_dir / "templates"
+if templates_dir.exists():
+    for f in templates_dir.rglob("*"):
+        if f.is_file():
+            rel_path = f.relative_to(rustfava_dir)
+            datas.append((str(f), str(rel_path.parent)))
+
+# Translations (.mo files)
+translations_dir = rustfava_dir / "translations"
+if translations_dir.exists():
+    for f in translations_dir.rglob("*.mo"):
+        rel_path = f.relative_to(rustfava_dir)
+        datas.append((str(f), str(rel_path.parent)))
+
+# WASM file for rustledger
+wasm_file = rustfava_dir / "rustledger" / "rustledger-wasi.wasm"
+if wasm_file.exists():
+    datas.append((str(wasm_file), "rustfava/rustledger"))
+
+# Help files
+help_dir = rustfava_dir / "help"
+if help_dir.exists():
+    for f in help_dir.rglob("*"):
+        if f.is_file():
+            rel_path = f.relative_to(rustfava_dir)
+            datas.append((str(f), str(rel_path.parent)))
+
+# Hidden imports
+hiddenimports = [
+    "rustfava",
+    "rustfava.application",
+    "rustfava.cli",
+    "rustfava.core",
+    "rustfava.rustledger",
+    "rustfava.serialisation",
+]
 
 # Optionally add beancount for legacy plugin support
 try:
@@ -31,8 +79,8 @@ except Exception:
     pass
 
 a = Analysis(
-    ["../src/rustfava/cli.py"],
-    pathex=["."],
+    [str(rustfava_dir / "cli.py")],
+    pathex=[str(src_dir)],
     datas=datas,
     hiddenimports=hiddenimports,
 )
