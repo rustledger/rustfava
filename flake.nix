@@ -11,10 +11,19 @@
       let
         pkgs = import nixpkgs { inherit system; };
 
-        # Version to download from releases
-        version = "0.1.0";
+        # Read sources from JSON file (updated by CI)
+        desktopSources = builtins.fromJSON (builtins.readFile ./desktop-sources.json);
+        version = desktopSources.version;
 
-        # Target triple for the current platform
+        # Map Nix system to sources key
+        systemKey =
+          if system == "x86_64-linux" then "x86_64-linux"
+          else if system == "aarch64-linux" then "aarch64-linux"
+          else if system == "x86_64-darwin" then "x86_64-darwin"
+          else if system == "aarch64-darwin" then "aarch64-darwin"
+          else throw "Unsupported system: ${system}";
+
+        # Target triple for the current platform (used in tarball name)
         targetTriple =
           if pkgs.stdenv.isLinux then
             if pkgs.stdenv.hostPlatform.isx86_64 then "x86_64-unknown-linux-gnu"
@@ -25,15 +34,18 @@
             else "x86_64-apple-darwin"
           else throw "Unsupported platform";
 
+        # Get source for this system (if available)
+        hasDesktopSource = desktopSources ? ${systemKey};
+        desktopSource = if hasDesktopSource then desktopSources.${systemKey} else null;
+
         # Download desktop tarball from GitHub releases
-        desktopTarball = pkgs.fetchurl {
-          url = "https://github.com/rustledger/rustfava/releases/download/v${version}/rustfava-desktop-${targetTriple}.tar.gz";
-          # TODO: Update hash after first release with tarball
-          hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
-        };
+        desktopTarball = if hasDesktopSource then pkgs.fetchurl {
+          url = desktopSource.url;
+          hash = desktopSource.hash;
+        } else null;
 
         # Desktop app from release tarball
-        rustfava-desktop = pkgs.stdenv.mkDerivation {
+        rustfava-desktop = if desktopTarball != null then pkgs.stdenv.mkDerivation {
           pname = "rustfava-desktop";
           inherit version;
 
@@ -82,7 +94,7 @@
             platforms = platforms.linux;
             mainProgram = "rustfava-desktop";
           };
-        };
+        } else null;
 
         # Python with Rustfava dependencies for dev shell
         pythonEnv = pkgs.python313.withPackages (ps: with ps; [
@@ -111,6 +123,7 @@
       in {
         packages = {
           default = rustfava;
+        } // pkgs.lib.optionalAttrs (rustfava-desktop != null) {
           desktop = rustfava-desktop;
         };
 
@@ -119,6 +132,7 @@
             type = "app";
             program = "${rustfava}/bin/rustfava";
           };
+        } // pkgs.lib.optionalAttrs (rustfava-desktop != null) {
           desktop = {
             type = "app";
             program = "${rustfava-desktop}/bin/rustfava-desktop";
