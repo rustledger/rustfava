@@ -89,10 +89,14 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install pyinstaller
-          # Install build dependencies first (custom build backend requires these)
+          # Install build dependencies (custom build backend requires these)
           pip install "setuptools>=80" "setuptools_scm>=8" "Babel>=2.7,<3" wheel
-          # Use non-editable install
-          pip install --no-build-isolation .
+          # Install runtime dependencies manually (avoids build backend import issues)
+          pip install "Flask>=2.2,<4" "Flask-Babel>=3,<5" "Jinja2>=3,<4" "Werkzeug>=2.2,<4" \
+            "beangulp>=0.1" "cheroot>=8,<12" "click>=7,<9" "markdown2>=2.3.0,<3" \
+            "ply>=3.11" "pydantic>=2.0" "watchfiles>=0.20.0" "beancount>=2,<4"
+          # Install rustfava without deps (they're already installed)
+          pip install --no-build-isolation --no-deps .
 
       - name: Build sidecar with PyInstaller
         run: |
