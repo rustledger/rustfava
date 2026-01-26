@@ -47,3 +47,4 @@ npm-debug.log
 # Rustledger build artifacts
 /src/rustfava/rustledger/.wasm-version
 /src/rustfava/rustledger/*.wasm
+flake.lock

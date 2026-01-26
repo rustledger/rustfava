@@ -43,8 +43,11 @@ jobs:
           TAG="${{ steps.version.outputs.tag }}"
 
           # Define platforms and their target triples
+          # Note: Windows not included (Nix doesn't run on Windows)
           declare -A PLATFORMS=(
             ["x86_64-linux"]="x86_64-unknown-linux-gnu"
+            ["x86_64-darwin"]="x86_64-apple-darwin"
+            ["aarch64-darwin"]="aarch64-apple-darwin"
           )
 
           # Start building JSON
