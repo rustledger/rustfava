@@ -6,7 +6,7 @@
 
 Manage your finances with plain text accounting.
 
-[![CI](https://github.com/rustledger/rustfava/actions/workflows/ci.yml/badge.svg)](https://github.com/rustledger/rustfava/actions/workflows/ci.yml)
+[![CI](https://github.com/rustledger/rustfava/actions/workflows/test.yml/badge.svg)](https://github.com/rustledger/rustfava/actions/workflows/test.yml)
 [![GitHub Release](https://img.shields.io/github/v/release/rustledger/rustfava)](https://github.com/rustledger/rustfava/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/rustfava)](https://pypi.org/project/rustfava/)
@@ -30,13 +30,23 @@ Manage your finances with plain text accounting.
 
 ## Install
 
-| Platform | Download |
-|----------|----------|
-| **macOS** | [`rustfava_0.1.0_aarch64.dmg`](https://github.com/rustledger/rustfava/releases/download/v0.1.0/rustfava_0.1.0_aarch64.dmg) |
-| **Windows** | [`rustfava_0.1.0_x64-setup.exe`](https://github.com/rustledger/rustfava/releases/download/v0.1.0/rustfava_0.1.0_x64-setup.exe) |
-| **Linux** | [`rustfava_0.1.0_amd64.AppImage`](https://github.com/rustledger/rustfava/releases/download/v0.1.0/rustfava_0.1.0_amd64.AppImage) |
+### Desktop App
+
+Download the latest release for your platform from the [Releases page](https://github.com/rustledger/rustfava/releases/latest).
+
+| Platform | Format |
+|----------|--------|
+| **macOS** | `.dmg` (Intel & Apple Silicon) |
+| **Windows** | `.exe` installer or `.msi` |
+| **Linux** | `.AppImage`, `.deb`, `.rpm`, or `.tar.gz` |
+
+### Other Installation Methods
+
+| Method | Command |
+|--------|---------|
 | **Docker** | `docker run -p 5000:5000 -v /path/to/ledger:/data ghcr.io/rustledger/rustfava /data/main.beancount` |
 | **PyPI** | `uv tool install rustfava` (requires Python 3.13+ and [wasmtime](https://wasmtime.dev/)) |
+| **Nix** | `nix run github:rustledger/rustfava#desktop` |
 
 <sub>Missing your platform? [Open an issue](https://github.com/rustledger/rustfava/issues/new) to request it.</sub>
 
