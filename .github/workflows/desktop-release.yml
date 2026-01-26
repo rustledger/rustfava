@@ -275,11 +275,25 @@ jobs:
           tauriScript: bun tauri
           args: --target ${{ matrix.target }}
 
+      - name: Create tarball (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p tarball-staging/bin tarball-staging/lib/rustfava/resources
+          # Copy main binary
+          cp desktop/src-tauri/target/${{ matrix.target }}/release/rustfava-desktop tarball-staging/bin/
+          # Copy sidecars (server + rustledger CLI tools)
+          cp desktop/src-tauri/binaries/* tarball-staging/bin/
+          # Copy resources
+          cp contrib/examples/example.beancount tarball-staging/lib/rustfava/resources/
+          # Create tarball
+          tar -czvf rustfava-desktop-${{ matrix.target }}.tar.gz -C tarball-staging .
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: rustfava-${{ matrix.target }}
           path: |
+            rustfava-desktop-${{ matrix.target }}.tar.gz
             desktop/src-tauri/target/${{ matrix.target }}/release/bundle/deb/*.deb
             desktop/src-tauri/target/${{ matrix.target }}/release/bundle/rpm/*.rpm
             desktop/src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage
@@ -308,6 +322,7 @@ jobs:
         uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
         with:
           files: |
+            artifacts/**/*.tar.gz
             artifacts/**/*.deb
             artifacts/**/*.rpm
             artifacts/**/*.AppImage
