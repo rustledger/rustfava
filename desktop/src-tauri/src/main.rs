@@ -64,20 +64,29 @@ fn get_example_file_path(app: AppHandle) -> Result<String, String> {
 /// Returns all inherited env vars with PATH modified to include sidecar directory
 #[tauri::command]
 fn get_terminal_env(app: AppHandle) -> Result<std::collections::HashMap<String, String>, String> {
-    // Get the sidecar directory
-    let resource_dir = app.path().resource_dir()
-        .map_err(|e| format!("Failed to get resource dir: {}", e))?;
-
     // Collect all current environment variables
     let mut env: std::collections::HashMap<String, String> = std::env::vars().collect();
-
-    // Prepend sidecar directory to PATH
     let current_path = env.get("PATH").cloned().unwrap_or_default();
-    let new_path = format!("{}:{}", resource_dir.to_string_lossy(), current_path);
-    env.insert("PATH".to_string(), new_path);
 
-    // Add marker for sidecar directory
-    env.insert("RUSTFAVA_SIDECAR_DIR".to_string(), resource_dir.to_string_lossy().to_string());
+    // Build PATH with multiple possible locations for binaries
+    let mut path_dirs = Vec::new();
+
+    // 1. Executable's directory (for Nix flake installs where binaries are siblings)
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            path_dirs.push(exe_dir.to_string_lossy().to_string());
+        }
+    }
+
+    // 2. Resource directory (for Tauri bundled apps)
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        path_dirs.push(resource_dir.to_string_lossy().to_string());
+        env.insert("RUSTFAVA_SIDECAR_DIR".to_string(), resource_dir.to_string_lossy().to_string());
+    }
+
+    // Prepend our directories to PATH
+    path_dirs.push(current_path);
+    env.insert("PATH".to_string(), path_dirs.join(":"));
 
     Ok(env)
 }
