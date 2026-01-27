@@ -1,7 +1,7 @@
 {
-  "version": "0.1.2",
+  "version": "0.1.3",
   "x86_64-linux": {
-    "url": "https://github.com/rustledger/rustfava/releases/download/v0.1.2/rustfava-desktop-x86_64-unknown-linux-gnu.tar.gz",
-    "hash": "sha256-+ZWYhww1/XGlEh9ym+XG4nOiLP0qnZo5220zxtTTjp8="
+    "url": "https://github.com/rustledger/rustfava/releases/download/v0.1.3/rustfava-desktop-x86_64-unknown-linux-gnu.tar.gz",
+    "hash": "sha256-LxGIIjXKLsY4JdLjelBs/4BbK731WFOgOBTpBZ+ZclA="
   }
 }
