@@ -283,6 +283,18 @@ jobs:
         working-directory: desktop
         run: bun install
 
+      - name: Update version from tag
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "Updating tauri.conf.json version to $VERSION"
+          cd desktop/src-tauri
+          # Update version in tauri.conf.json using jq
+          jq --arg v "$VERSION" '.version = $v' tauri.conf.json > tauri.conf.json.tmp
+          mv tauri.conf.json.tmp tauri.conf.json
+          cat tauri.conf.json | grep version
+
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@79c624843491f12ae9d63592534ed49df3bc4adb # v0
         env:
