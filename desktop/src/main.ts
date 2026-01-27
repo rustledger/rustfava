@@ -99,18 +99,40 @@ function getRecentFiles(): string[] {
   }
 }
 
-function addRecentFile(path: string) {
-  let recent = getRecentFiles().filter((p) => p !== path);
-  recent.unshift(path);
-  recent = recent.slice(0, MAX_RECENT);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(recent));
-  renderRecentFiles();
+function saveRecentFiles(paths: string[]) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(paths.slice(0, MAX_RECENT)));
 }
 
-function renderRecentFiles() {
-  const recent = getRecentFiles();
+async function addRecentFile(path: string) {
+  // Normalize path to prevent duplicates from different representations
+  try {
+    const normalized = await invoke<string>("normalize_path", { path });
+    let recent = getRecentFiles().filter((p) => p !== normalized);
+    recent.unshift(normalized);
+    saveRecentFiles(recent);
+    renderRecentFiles();
+  } catch {
+    // File doesn't exist or can't be normalized, skip adding
+  }
+}
+
+async function renderRecentFiles() {
+  const stored = getRecentFiles();
   const sidebar = document.getElementById("sidebar")!;
   const list = document.getElementById("recentList")!;
+
+  if (stored.length === 0) {
+    sidebar.classList.add("empty");
+    return;
+  }
+
+  // Filter to only existing files
+  const recent = await invoke<string[]>("filter_existing_paths", { paths: stored });
+
+  // Update storage if some files were removed
+  if (recent.length !== stored.length) {
+    saveRecentFiles(recent);
+  }
 
   if (recent.length === 0) {
     sidebar.classList.add("empty");
@@ -267,7 +289,7 @@ async function openPath(path: string) {
   try {
     const result = await invoke<OpenFileResult>("open_file", { path });
 
-    addRecentFile(path);
+    await addRecentFile(path);
 
     if (result.already_open) {
       switchTab(result.tab_id);

@@ -209,6 +209,30 @@ fn get_default_shell() -> serde_json::Value {
     })
 }
 
+/// Normalize a path and check if it exists
+#[tauri::command]
+fn normalize_path(path: String) -> Result<String, String> {
+    let path = std::path::Path::new(&path);
+    match path.canonicalize() {
+        Ok(canonical) => Ok(canonical.to_string_lossy().to_string()),
+        Err(_) => Err("File does not exist".to_string()),
+    }
+}
+
+/// Filter a list of paths to only those that exist, returning normalized paths
+#[tauri::command]
+fn filter_existing_paths(paths: Vec<String>) -> Vec<String> {
+    paths
+        .into_iter()
+        .filter_map(|p| {
+            std::path::Path::new(&p)
+                .canonicalize()
+                .ok()
+                .map(|c| c.to_string_lossy().to_string())
+        })
+        .collect()
+}
+
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 fn get_shell_and_args() -> (String, Vec<String>) {
     // Get user's actual login shell from system (not $SHELL which may be overridden by nix/etc)
@@ -383,7 +407,9 @@ fn main() {
             get_tabs,
             get_default_shell,
             get_terminal_env,
-            get_example_file_path
+            get_example_file_path,
+            normalize_path,
+            filter_existing_paths
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { .. } = event {
