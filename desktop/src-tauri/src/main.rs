@@ -45,6 +45,20 @@ fn get_example_file_path(app: AppHandle) -> Result<String, String> {
         return Ok(bundled_path.to_string_lossy().to_string());
     }
 
+    // Fall back to path relative to executable (for Nix flake installs)
+    // Nix layout: bin/rustfava-desktop, lib/rustfava/resources/example.beancount
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(bin_dir) = exe_path.parent() {
+            let nix_path = bin_dir.parent()
+                .map(|p| p.join("lib").join("rustfava").join("resources").join("example.beancount"));
+            if let Some(path) = nix_path {
+                if path.exists() {
+                    return Ok(path.to_string_lossy().to_string());
+                }
+            }
+        }
+    }
+
     // Fall back to development path (relative to desktop/src-tauri)
     let dev_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent() // desktop/
