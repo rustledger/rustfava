@@ -18,7 +18,16 @@ jobs:
   update-sources:
     runs-on: ubuntu-latest
     steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.BOT_APP_ID }}
+          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
+
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Install Nix
         uses: cachix/install-nix-action@4e002c8ec80594ecd40e759629461e26c8abed15 # v31
@@ -93,9 +102,12 @@ jobs:
           echo "Updated desktop-sources.json:"
           cat desktop-sources.json
 
+      # Use app token so the PR triggers CI workflows automatically
+      # (GITHUB_TOKEN can't trigger other workflows)
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@5e914681df9dc83aa4e4905692ca88beb2f9e91f # v7.0.5
         with:
+          token: ${{ steps.app-token.outputs.token }}
           base: main
           commit-message: "chore: update desktop sources for ${{ steps.version.outputs.tag }}"
           title: "chore: update desktop sources for ${{ steps.version.outputs.tag }}"
