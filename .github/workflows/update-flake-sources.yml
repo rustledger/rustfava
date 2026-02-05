@@ -1,8 +1,11 @@
 name: Update Flake Sources
 
 on:
-  release:
-    types: [published]
+  # Trigger after Desktop Release completes (which uploads the tarballs)
+  workflow_run:
+    workflows: ["Desktop Release"]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       version:
@@ -17,6 +20,13 @@ permissions:
 jobs:
   update-sources:
     runs-on: ubuntu-latest
+    # Only run if:
+    # - workflow_dispatch (manual trigger), OR
+    # - workflow_run completed successfully AND was triggered by a tag push
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       startsWith(github.event.workflow_run.head_branch, 'v'))
     steps:
       - name: Generate GitHub App token
         id: app-token
@@ -37,10 +47,11 @@ jobs:
       - name: Get version
         id: version
         run: |
-          if [ "${{ github.event_name }}" = "release" ]; then
-            VERSION="${{ github.event.release.tag_name }}"
-          else
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             VERSION="${{ inputs.version }}"
+          else
+            # workflow_run trigger - get tag from the triggering workflow
+            VERSION="${{ github.event.workflow_run.head_branch }}"
           fi
           echo "version=${VERSION#v}" >> $GITHUB_OUTPUT
           echo "tag=$VERSION" >> $GITHUB_OUTPUT
@@ -64,6 +75,7 @@ jobs:
           echo "  \"version\": \"$VERSION\"," >> desktop-sources.json.new
 
           FIRST=true
+          FOUND_ANY=false
           for PLATFORM in "${!PLATFORMS[@]}"; do
             TARGET="${PLATFORMS[$PLATFORM]}"
             URL="https://github.com/rustledger/rustfava/releases/download/$TAG/rustfava-desktop-$TARGET.tar.gz"
@@ -87,6 +99,7 @@ jobs:
               echo -n "  }" >> desktop-sources.json.new
 
               echo "  $PLATFORM: $SRI_HASH"
+              FOUND_ANY=true
             else
               echo "  $PLATFORM: tarball not found, skipping"
             fi
@@ -94,6 +107,13 @@ jobs:
 
           echo "" >> desktop-sources.json.new
           echo "}" >> desktop-sources.json.new
+
+          # Fail if no tarballs were found
+          if [ "$FOUND_ANY" = false ]; then
+            echo "ERROR: No desktop tarballs found for $TAG"
+            echo "This likely means the Desktop Release workflow hasn't uploaded them yet."
+            exit 1
+          fi
 
           # Pretty print with jq
           jq '.' desktop-sources.json.new > desktop-sources.json
