@@ -9,5 +9,6 @@ exclude .prettierignore
 prune .github
 
 graft src/rustfava/static
+graft src/rustfava/templates
 exclude src/rustfava/translations/babel.conf
 recursive-include src/rustfava/translations *.mo
