@@ -27,6 +27,7 @@ WORKDIR /app
 
 # Copy source and frontend (needed for build backend)
 COPY pyproject.toml .
+COPY MANIFEST.in .
 COPY _build_backend.py .
 COPY src/ src/
 COPY frontend/ frontend/
