@@ -16,14 +16,14 @@ jobs:
       id-token: "write"
       contents: "read"
     steps:
-      - uses: "actions/checkout@v5"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
-          ref: "${{ (inputs.tag != null) && format('refs/tags/{0}', inputs.tag) || '' }}"
-      - uses: "DeterminateSystems/determinate-nix-action@v3"
-      - uses: "DeterminateSystems/flakehub-push@main"
+          ref: "${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || github.ref }}"
+      - uses: DeterminateSystems/determinate-nix-action@e2534ae04b9dc72e8d57d4cf0a87571b500e9533 # v3.2.0
+      - uses: DeterminateSystems/flakehub-push@5f4064d2f8bbc84c3f51f4e5d12d91e15f8a33f4 # v5
         with:
           visibility: "public"
           name: "rustledger/rustfava"
-          tag: "${{ inputs.tag }}"
+          tag: "${{ inputs.tag || github.ref_name }}"
           include-output-paths: true
