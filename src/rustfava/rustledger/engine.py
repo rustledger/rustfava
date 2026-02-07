@@ -263,7 +263,9 @@ class RustledgerEngine:
         """
         # Resolve to absolute path for WASM file access
         file_path = Path(filepath).resolve()
-        allow_dir = str(file_path.parent)
+        # Use root "/" to allow include paths with ".." (parent directory references)
+        # This matches native beancount behavior where includes can reference any path
+        allow_dir = "/"
         result_json = self._run(
             ["is-encrypted", str(file_path)],
             allow_dir=allow_dir,
@@ -438,7 +440,9 @@ class RustledgerEngine:
                 - loaded_files: List of all resolved include files
         """
         file_path = Path(filepath).resolve()
-        allow_dir = str(file_path.parent)
+        # Use root "/" to allow include paths with ".." (parent directory references)
+        # This matches native beancount behavior where includes can reference any path
+        allow_dir = "/"
 
         # Build command args
         args = ["load-full", str(file_path)]

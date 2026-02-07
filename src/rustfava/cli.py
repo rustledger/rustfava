@@ -8,6 +8,16 @@ from pathlib import Path
 
 import click
 
+# Version for PyInstaller builds where importlib.metadata is unavailable
+__version__ = "0.1.8"
+
+try:
+    from importlib.metadata import version as get_version
+
+    __version__ = get_version("rustfava")
+except Exception:  # pragma: no cover
+    pass
+
 
 class AddressInUse(click.ClickException):  # noqa: D101
     def __init__(self, port: int) -> None:  # pragma: no cover
@@ -93,7 +103,7 @@ def _add_env_filenames(filenames: tuple[str, ...]) -> tuple[str, ...]:
 @click.option(
     "--poll-watcher", is_flag=True, help="Use old polling-based watcher."
 )
-@click.version_option(package_name="rustfava")
+@click.version_option(version=__version__)
 def main(  # noqa: PLR0913
     *,
     filenames: tuple[str, ...] = (),
