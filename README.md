@@ -40,6 +40,11 @@ Download the latest release for your platform from the [Releases page](https://g
 | **Windows** | `.exe` installer or `.msi` |
 | **Linux** | `.AppImage`, `.deb`, `.rpm`, or `.tar.gz` |
 
+> **Note for Linux deb/rpm users**: The server component requires [wasmtime](https://wasmtime.dev/). Install it with:
+> ```bash
+> curl https://wasmtime.dev/install.sh -sSf | bash
+> ```
+
 ### Other Installation Methods
 
 | Method | Command |
