@@ -15,7 +15,7 @@ try:
     from importlib.metadata import version as get_version
 
     __version__ = get_version("rustfava")
-except Exception:
+except Exception:  # pragma: no cover
     pass
 
 
