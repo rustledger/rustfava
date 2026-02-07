@@ -9,7 +9,7 @@ from pathlib import Path
 import click
 
 # Version for PyInstaller builds where importlib.metadata is unavailable
-__version__ = "0.1.8"
+__version__ = "0.1.10"
 
 try:
     from importlib.metadata import version as get_version
