@@ -16,12 +16,12 @@ jobs:
       id-token: "write"
       contents: "read"
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
           ref: "${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || github.ref }}"
       - uses: DeterminateSystems/determinate-nix-action@89ab342bd48ff7318caf8d39d6a330c7b1df8f2f # v3.15.2
-      - uses: DeterminateSystems/flakehub-push@8da9e38b7e77f2b0a8aa08a22e57cc5c6316ea72 # v5
+      - uses: DeterminateSystems/flakehub-push@71f57208810a5d299fc6545350981de98fdbc860 # v6
         with:
           visibility: "public"
           name: "rustledger/rustfava"
