@@ -1,0 +1,69 @@
+name: Update Rustledger WASM
+
+on:
+  repository_dispatch:
+    types: [rustledger-release]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Rustledger version (e.g., v0.8.5)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-wasm-version:
+    name: Update WASM version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.BOT_APP_ID }}
+          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${{ github.event.client_payload.version }}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Using rustledger version: $VERSION"
+
+      - name: Update RUSTLEDGER_VERSION in engine.py
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          FILE="src/rustfava/rustledger/engine.py"
+
+          # Update the version
+          sed -i "s/RUSTLEDGER_VERSION = \"v[0-9]*\.[0-9]*\.[0-9]*\"/RUSTLEDGER_VERSION = \"$VERSION\"/" "$FILE"
+
+          # Verify the change
+          grep "RUSTLEDGER_VERSION" "$FILE"
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          base: main
+          commit-message: "chore: upgrade rustledger to ${{ steps.version.outputs.version }}"
+          title: "chore: upgrade rustledger to ${{ steps.version.outputs.version }}"
+          body: |
+            Automated update of rustledger WASM version to ${{ steps.version.outputs.version }}.
+
+            This PR was triggered by a new rustledger release.
+
+            See [rustledger releases](https://github.com/rustledger/rustledger/releases) for changelog.
+          branch: chore/upgrade-rustledger-${{ steps.version.outputs.version }}
+          delete-branch: true
