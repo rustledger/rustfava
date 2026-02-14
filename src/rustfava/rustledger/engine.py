@@ -1,7 +1,7 @@
-"""Rustledger WASM engine using wasmtime CLI.
+"""Rustledger WASM engine using wasmtime CLI with JSON-RPC 2.0.
 
 This module provides a Python interface to rustledger-wasi via the wasmtime
-CLI. The WASM module uses stdin/stdout for I/O with JSON serialization.
+CLI. The WASM module uses JSON-RPC 2.0 protocol over stdin/stdout.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 SUPPORTED_API_VERSION = "1."
 
 # Rustledger release to download
-RUSTLEDGER_VERSION = "v0.8.5"
+RUSTLEDGER_VERSION = "v0.8.7"
 RUSTLEDGER_WASM_URL = (
     f"https://github.com/rustledger/rustledger/releases/download/"
     f"{RUSTLEDGER_VERSION}/rustledger-ffi-wasi-{RUSTLEDGER_VERSION}.wasm"
@@ -39,15 +39,21 @@ class RustledgerAPIVersionError(RustledgerError):
 class RustledgerEngine:
     """Interface to rustledger WASM module via wasmtime CLI.
 
-    The rustledger-wasi module is a CLI that reads from stdin and writes
-    JSON to stdout. Commands:
-    - load [filename]: Parse source → entries + errors + options
-    - query <bql>: Execute BQL → columns + rows + errors
-    - validate: Parse + validate → valid + errors
-    - version: → version string
+    The rustledger-wasi module uses JSON-RPC 2.0 protocol:
+    - Request: {"jsonrpc": "2.0", "method": "...", "params": {...}, "id": 1}
+    - Response: {"jsonrpc": "2.0", "result": {...}, "id": 1}
+    - Error: {"jsonrpc": "2.0", "error": {"code": ..., "message": "..."}, "id": 1}
+
+    Methods:
+    - ledger.load: Parse source → entries + errors + options
+    - ledger.loadFile: Load file with includes → entries + errors + options
+    - query.execute: Execute BQL → columns + rows + errors
+    - ledger.validate: Validate source → valid + errors
+    - util.version: → apiVersion + version
     """
 
     _instance: RustledgerEngine | None = None
+    _request_id: int = 0
 
     def __init__(self, wasm_path: Path | None = None) -> None:
         """Initialize the rustledger engine.
@@ -93,51 +99,56 @@ class RustledgerEngine:
             cls._instance = cls(wasm_path)
         return cls._instance
 
-    def _run(
+    def _next_id(self) -> int:
+        """Get next request ID."""
+        self._request_id += 1
+        return self._request_id
+
+    def _rpc_call(
         self,
-        args: list[str],
-        stdin_data: str | None = None,
+        method: str,
+        params: dict[str, Any] | None = None,
         *,
         allow_dir: str | None = None,
-    ) -> str:
-        """Run rustledger-wasi with given arguments.
+    ) -> dict[str, Any]:
+        """Make a JSON-RPC 2.0 call to rustledger-wasi.
 
         Args:
-            args: Command arguments (e.g., ["load"], ["query", "SELECT ..."])
-            stdin_data: Data to pass via stdin
+            method: JSON-RPC method name (e.g., "ledger.load", "query.execute")
+            params: Method parameters
             allow_dir: Directory to allow WASM access to (for file operations)
 
         Returns:
-            stdout output as string
+            Result dict from the JSON-RPC response
 
         Raises:
-            RustledgerError: If the command fails
-
-        Exit codes:
-            0 = Success (stdout has valid JSON)
-            1 = User error (stderr has error message, not JSON)
-            2 = Internal error (serialization failures)
+            RustledgerError: If the call fails
         """
-        # Assert wasmtime is set (checked in __init__)
+        # Build JSON-RPC request
+        request: dict[str, Any] = {
+            "jsonrpc": "2.0",
+            "method": method,
+            "id": self._next_id(),
+        }
+        if params:
+            request["params"] = params
+
+        request_json = json.dumps(request)
+
+        # Build wasmtime command
         assert self._wasmtime is not None
-        cmd: list[str] = [
-            self._wasmtime,
-            "run",
-        ]
+        cmd: list[str] = [self._wasmtime, "run"]
         if allow_dir:
             cmd.extend(["--dir", allow_dir])
-        cmd.extend([
-            str(self._wasm_path),
-            *args,
-        ])
+        cmd.append(str(self._wasm_path))
 
         try:
             result = subprocess.run(
                 cmd,
-                input=stdin_data,
+                input=request_json,
                 capture_output=True,
                 text=True,
-                timeout=60,  # 60 second timeout
+                timeout=60,
                 check=False,
             )
         except subprocess.TimeoutExpired as e:
@@ -147,48 +158,25 @@ class RustledgerEngine:
             msg = f"Failed to run wasmtime: {e}"
             raise RustledgerError(msg) from e
 
-        # Handle exit codes per rustledger FFI spec
-        if result.returncode == 1:
-            # User error - stderr has the error message (not JSON)
-            error_msg = result.stderr.strip() or "Unknown user error"
-            raise RustledgerError(error_msg)
-        if result.returncode == 2:
-            # Internal error
-            error_msg = result.stderr.strip() or "Internal rustledger error"
-            raise RustledgerError(f"Internal error: {error_msg}")
-        if result.returncode != 0:
-            # Other non-zero exit code
+        # JSON-RPC always returns valid JSON on stdout (even for errors)
+        if not result.stdout.strip():
             error_msg = result.stderr.strip() or f"Exit code {result.returncode}"
-            raise RustledgerError(error_msg)
+            raise RustledgerError(f"Empty response: {error_msg}")
 
-        return str(result.stdout)
+        try:
+            response = json.loads(result.stdout)
+        except json.JSONDecodeError as e:
+            raise RustledgerError(f"Invalid JSON response: {e}") from e
 
-    def _parse_response(self, json_str: str) -> dict[str, Any]:
-        """Parse JSON response and check API version.
+        # Check for JSON-RPC error
+        if "error" in response:
+            error = response["error"]
+            code = error.get("code", -32603)
+            message = error.get("message", "Unknown error")
+            raise RustledgerError(f"[{code}] {message}")
 
-        Args:
-            json_str: JSON string from rustledger
-
-        Returns:
-            Parsed JSON dict
-
-        Raises:
-            RustledgerAPIVersionError: If API version is incompatible
-        """
-        data = json.loads(json_str)
-        api_version = data.get("api_version")
-
-        # Accept responses without api_version (legacy/pre-1.0 format)
-        # Once rustledger 1.0 is deployed, we can make this stricter
-        if api_version is not None and not api_version.startswith(
-            SUPPORTED_API_VERSION
-        ):
-            msg = (
-                f"Incompatible rustledger API version: {api_version}. "
-                f"Expected {SUPPORTED_API_VERSION}x"
-            )
-            raise RustledgerAPIVersionError(msg)
-        return dict(data)
+        # Return the result
+        return dict(response.get("result", {}))
 
     def load(self, source: str, filename: str = "<stdin>") -> dict[str, Any]:
         """Load/parse beancount source and return entries, errors, options.
@@ -200,13 +188,11 @@ class RustledgerEngine:
         Returns:
             Dict with keys: api_version, entries, errors, options
         """
-        # Pass filename as argument if provided
-        args = ["load"]
+        params: dict[str, Any] = {"source": source}
         if filename != "<stdin>":
-            args.append(filename)
+            params["filename"] = filename
 
-        result_json = self._run(args, stdin_data=source)
-        return self._parse_response(result_json)
+        return self._rpc_call("ledger.load", params)
 
     def query(self, source: str, query_string: str) -> dict[str, Any]:
         """Run a BQL query against beancount source.
@@ -218,8 +204,7 @@ class RustledgerEngine:
         Returns:
             Dict with keys: api_version, columns, rows, errors
         """
-        result_json = self._run(["query", query_string], stdin_data=source)
-        return self._parse_response(result_json)
+        return self._rpc_call("query.execute", {"source": source, "query": query_string})
 
     def validate(self, source: str) -> dict[str, Any]:
         """Validate beancount source.
@@ -230,13 +215,11 @@ class RustledgerEngine:
         Returns:
             Dict with keys: api_version, valid, errors
         """
-        result_json = self._run(["validate"], stdin_data=source)
-        return self._parse_response(result_json)
+        return self._rpc_call("ledger.validate", {"source": source})
 
     def version(self) -> str:
         """Get rustledger version string."""
-        result_json = self._run(["version"])
-        data = self._parse_response(result_json)
+        data = self._rpc_call("util.version")
         return str(data.get("version", "unknown"))
 
     def format_entries(self, source: str) -> str:
@@ -248,8 +231,7 @@ class RustledgerEngine:
         Returns:
             Formatted beancount source
         """
-        result_json = self._run(["format"], stdin_data=source)
-        data = self._parse_response(result_json)
+        data = self._rpc_call("format.source", {"source": source})
         return str(data.get("formatted", ""))
 
     def is_encrypted(self, filepath: str) -> bool:
@@ -265,12 +247,11 @@ class RustledgerEngine:
         file_path = Path(filepath).resolve()
         # Use root "/" to allow include paths with ".." (parent directory references)
         # This matches native beancount behavior where includes can reference any path
-        allow_dir = "/"
-        result_json = self._run(
-            ["is-encrypted", str(file_path)],
-            allow_dir=allow_dir,
+        data = self._rpc_call(
+            "util.isEncrypted",
+            {"path": str(file_path)},
+            allow_dir="/",
         )
-        data = self._parse_response(result_json)
         return bool(data.get("encrypted", False))
 
     def get_account_type(self, account: str) -> str:
@@ -282,9 +263,8 @@ class RustledgerEngine:
         Returns:
             Account type string
         """
-        result_json = self._run(["get-account-type", account])
-        data = self._parse_response(result_json)
-        return str(data.get("account_type", ""))
+        data = self._rpc_call("util.getAccountType", {"account": account})
+        return str(data.get("accountType", ""))
 
     def clamp(
         self,
@@ -302,11 +282,15 @@ class RustledgerEngine:
         Returns:
             Dict with keys: api_version, entries, errors
         """
-        result_json = self._run(
-            ["clamp", begin_date, end_date],
-            stdin_data=source,
-        )
-        return self._parse_response(result_json)
+        # Two-step: load source, then clamp entries
+        load_result = self._rpc_call("ledger.load", {"source": source})
+        entries = load_result.get("entries", [])
+
+        return self._rpc_call("entry.clamp", {
+            "entries": entries,
+            "beginDate": begin_date,
+            "endDate": end_date,
+        })
 
     def clamp_entries(
         self,
@@ -327,16 +311,11 @@ class RustledgerEngine:
         Returns:
             Dict with keys: api_version, entries, errors
         """
-        input_data = json.dumps({
+        return self._rpc_call("entry.clamp", {
             "entries": entries_json,
-            "begin_date": begin_date,
-            "end_date": end_date,
+            "beginDate": begin_date,
+            "endDate": end_date,
         })
-        result_json = self._run(
-            ["clamp-entries"],
-            stdin_data=input_data,
-        )
-        return self._parse_response(result_json)
 
     def types(self) -> dict[str, Any]:
         """Get type constants (MISSING, Booking, ALL_DIRECTIVES).
@@ -344,8 +323,7 @@ class RustledgerEngine:
         Returns:
             Dict with keys: api_version, all_directives, booking_methods, ...
         """
-        result_json = self._run(["types"])
-        return self._parse_response(result_json)
+        return self._rpc_call("util.types")
 
     def format_entry(self, entry_json: dict[str, Any]) -> str:
         """Format a single entry to beancount string.
@@ -356,11 +334,7 @@ class RustledgerEngine:
         Returns:
             Formatted beancount string
         """
-        result_json = self._run(
-            ["format-entry"],
-            stdin_data=json.dumps(entry_json),
-        )
-        data = self._parse_response(result_json)
+        data = self._rpc_call("format.entry", {"entry": entry_json})
         return str(data.get("formatted", ""))
 
     def format_entries_json(self, entries_json: list[dict[str, Any]]) -> str:
@@ -372,11 +346,7 @@ class RustledgerEngine:
         Returns:
             Formatted beancount string (concatenated)
         """
-        result_json = self._run(
-            ["format-entries"],
-            stdin_data=json.dumps(entries_json),
-        )
-        data = self._parse_response(result_json)
+        data = self._rpc_call("format.entries", {"entries": entries_json})
         return str(data.get("formatted", ""))
 
     def create_entry(self, entry_json: dict[str, Any]) -> dict[str, Any]:
@@ -388,11 +358,7 @@ class RustledgerEngine:
         Returns:
             Complete entry dict with meta and hash
         """
-        result_json = self._run(
-            ["create-entry"],
-            stdin_data=json.dumps(entry_json),
-        )
-        data = self._parse_response(result_json)
+        data = self._rpc_call("entry.create", {"entry": entry_json})
         return dict(data.get("entry", {}))
 
     def create_entries(
@@ -406,11 +372,7 @@ class RustledgerEngine:
         Returns:
             List of complete entry dicts with meta and hashes
         """
-        result_json = self._run(
-            ["create-entries"],
-            stdin_data=json.dumps(entries_json),
-        )
-        data = self._parse_response(result_json)
+        data = self._rpc_call("entry.createBatch", {"entries": entries_json})
         return list(data.get("entries", []))
 
     def load_full(
@@ -442,15 +404,12 @@ class RustledgerEngine:
         file_path = Path(filepath).resolve()
         # Use root "/" to allow include paths with ".." (parent directory references)
         # This matches native beancount behavior where includes can reference any path
-        allow_dir = "/"
 
-        # Build command args
-        args = ["load-full", str(file_path)]
+        params: dict[str, Any] = {"path": str(file_path)}
         if plugins:
-            args.extend(plugins)
+            params["plugins"] = plugins
 
-        result_json = self._run(args, allow_dir=allow_dir)
-        return self._parse_response(result_json)
+        return self._rpc_call("ledger.loadFile", params, allow_dir="/")
 
     def filter_entries(
         self,
@@ -477,13 +436,8 @@ class RustledgerEngine:
         Returns:
             Dict with keys: api_version, entries, errors
         """
-        input_data = {
+        return self._rpc_call("entry.filter", {
             "entries": entries_json,
-            "begin_date": begin_date,
-            "end_date": end_date,
-        }
-        result_json = self._run(
-            ["filter-entries"],
-            stdin_data=json.dumps(input_data),
-        )
-        return self._parse_response(result_json)
+            "beginDate": begin_date,
+            "endDate": end_date,
+        })
