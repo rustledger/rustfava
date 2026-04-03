@@ -304,6 +304,30 @@ jobs:
           tauriScript: bun tauri
           args: --target ${{ matrix.target }}
 
+      - name: Smoke test (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          APP_PATH="$(pwd)/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos/rustfava.app"
+          echo "Testing app at: $APP_PATH"
+          ls -la "$APP_PATH" || { echo "App bundle not found!"; exit 1; }
+
+          # Launch app, wait for it to start, then check if it's still running
+          open "$APP_PATH" &
+          sleep 5
+
+          # Check if the app is running (didn't crash on startup)
+          if pgrep -f "rustfava-desktop" > /dev/null; then
+            echo "✓ App launched successfully"
+            # Clean up - quit the app
+            pkill -f "rustfava-desktop" || true
+          else
+            echo "✗ App crashed on startup!"
+            # Check for crash logs
+            ls -la ~/Library/Logs/DiagnosticReports/ 2>/dev/null | grep -i rustfava || true
+            cat ~/Library/Logs/DiagnosticReports/*rustfava* 2>/dev/null | head -100 || true
+            exit 1
+          fi
+
       - name: Create tarball (Linux)
         if: runner.os == 'Linux'
         run: |

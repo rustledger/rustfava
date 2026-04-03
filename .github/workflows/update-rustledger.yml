@@ -52,6 +52,17 @@ jobs:
           # Verify the change
           grep "RUSTLEDGER_VERSION" "$FILE"
 
+      - name: Close stale upgrade PRs
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          # Find and close any open PRs for older rustledger upgrades
+          gh pr list --state open --head "chore/upgrade-rustledger-" --json number,headRefName \
+            --jq '.[] | "\(.number) \(.headRefName)"' | while read -r pr_number branch; do
+            echo "Closing stale PR #$pr_number ($branch)"
+            gh pr close "$pr_number" --comment "Superseded by upgrade to ${{ steps.version.outputs.version }}" --delete-branch || true
+          done
+
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v8
         with:
