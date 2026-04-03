@@ -308,23 +308,41 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           APP_PATH="$(pwd)/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos/rustfava.app"
+          BINARY="$APP_PATH/Contents/MacOS/rustfava-desktop"
           echo "Testing app at: $APP_PATH"
           ls -la "$APP_PATH" || { echo "App bundle not found!"; exit 1; }
+          file "$BINARY"
 
-          # Launch app, wait for it to start, then check if it's still running
-          open "$APP_PATH" &
+          # Run binary directly to capture stdout/stderr and panic backtrace
+          echo "=== Launching with RUST_BACKTRACE=full ==="
+          RUST_BACKTRACE=full RUST_LOG=debug "$BINARY" > /tmp/app.log 2>&1 &
+          PID=$!
+          echo "Started PID: $PID"
+
           sleep 5
 
-          # Check if the app is running (didn't crash on startup)
-          if pgrep -f "rustfava-desktop" > /dev/null; then
+          if kill -0 $PID 2>/dev/null; then
             echo "✓ App launched successfully"
-            # Clean up - quit the app
-            pkill -f "rustfava-desktop" || true
+            kill $PID || true
           else
             echo "✗ App crashed on startup!"
-            # Check for crash logs
-            ls -la ~/Library/Logs/DiagnosticReports/ 2>/dev/null | grep -i rustfava || true
-            cat ~/Library/Logs/DiagnosticReports/*rustfava* 2>/dev/null | head -100 || true
+            echo ""
+            echo "=== App output ==="
+            cat /tmp/app.log || true
+            echo ""
+            echo "=== Exit code ==="
+            wait $PID || EXIT_CODE=$?
+            echo "Exit code: ${EXIT_CODE:-unknown}"
+            echo ""
+            echo "=== Crash reports ==="
+            sleep 2
+            find ~/Library/Logs/DiagnosticReports -name "*rustfava*" -mmin -5 2>/dev/null | head -3 | while read f; do
+              echo "--- $f ---"
+              head -150 "$f"
+            done
+            echo ""
+            echo "=== System log ==="
+            log show --predicate 'processImagePath CONTAINS "rustfava"' --last 1m 2>/dev/null | tail -30 || true
             exit 1
           fi
 
