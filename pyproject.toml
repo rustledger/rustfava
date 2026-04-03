@@ -87,7 +87,7 @@ pre-commit = [
 # Dependencies for the contrib/scripts.py.
 scripts = [
     "beanquery>=0.1,<0.3",
-    "requests>=2",
+    "requests>=2.33",
 ]
 # Dependencies for tests.
 test = [
