@@ -20,7 +20,7 @@ jobs:
         with:
           persist-credentials: false
           ref: "${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || github.ref }}"
-      - uses: DeterminateSystems/determinate-nix-action@a18f73c54ca8525de051e73c31512a67f44df919 # v3.17.1
+      - uses: DeterminateSystems/determinate-nix-action@1361e7900eb437fb341f0f226e8fbd9a0d8284fa # v3.17.2
       - uses: DeterminateSystems/flakehub-push@71f57208810a5d299fc6545350981de98fdbc860 # v6
         with:
           visibility: "public"
