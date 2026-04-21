@@ -7,7 +7,7 @@ import type { Attachment } from "svelte/attachments";
  */
 function showTooltip(target: HTMLElement, description: string): () => void {
   const { hidden } = target;
-  if (hidden) {
+  if (hidden === true) {
     target.hidden = false;
   }
   const tooltip = document.createElement("div");
@@ -24,7 +24,7 @@ function showTooltip(target: HTMLElement, description: string): () => void {
   tooltip.style.top = `${(top + window.scrollY).toString()}px`;
   return () => {
     tooltip.remove();
-    if (hidden) {
+    if (hidden === true) {
       target.hidden = true;
     }
   };
@@ -152,7 +152,6 @@ export type KeySpec =
 
 const isMac =
   // This still seems to be the least bad way to check whether we are running on macOS or iOS
-  // eslint-disable-next-line @typescript-eslint/no-deprecated
   navigator.platform.startsWith("Mac") || navigator.platform === "iPhone";
 
 export const modKey = isMac ? "Cmd" : "Ctrl";
