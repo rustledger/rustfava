@@ -41,13 +41,6 @@
     ],
     "externalBin": [
       "binaries/rustfava-server",
-      "binaries/bean-check",
-      "binaries/bean-doctor",
-      "binaries/bean-extract",
-      "binaries/bean-format",
-      "binaries/bean-price",
-      "binaries/bean-query",
-      "binaries/bean-report",
       "binaries/rledger"
     ],
     "linux": {

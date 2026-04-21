@@ -301,5 +301,4 @@ clean-all: clean
     rm -rf .cache
     rm -f src/rustfava/rustledger/.wasm-version
     rm -f desktop/src-tauri/binaries/.cli-version-*
-    rm -f desktop/src-tauri/binaries/bean-*
     rm -f desktop/src-tauri/binaries/rledger-*

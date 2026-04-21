@@ -180,7 +180,7 @@ jobs:
           mkdir -p binaries
           tar -xzf rustledger.${{ matrix.archive }}
           # Rename binaries to include target triple (Tauri sidecar convention)
-          for bin in bean-check bean-doctor bean-extract bean-format bean-price bean-query bean-report rledger; do
+          for bin in rledger; do
             if [ -f "$bin" ]; then
               mv "$bin" "binaries/${bin}-${{ matrix.target }}"
             fi
@@ -192,7 +192,7 @@ jobs:
           mkdir -p binaries
           unzip rustledger.${{ matrix.archive }}
           # Rename binaries to include target triple (Tauri sidecar convention)
-          for bin in bean-check bean-doctor bean-extract bean-format bean-price bean-query bean-report rledger; do
+          for bin in rledger; do
             if [ -f "${bin}.exe" ]; then
               mv "${bin}.exe" "binaries/${bin}-${{ matrix.target }}.exe"
             fi

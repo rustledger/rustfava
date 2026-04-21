@@ -20,8 +20,6 @@ const RUSTLEDGER_REPO = "https://github.com/rustledger/rustledger.git";
 
 // CLI binaries to build
 const CLI_BINARIES = [
-  "bean-check", "bean-doctor", "bean-extract", "bean-format",
-  "bean-price", "bean-query", "bean-report",
   "rledger"
 ];
 
