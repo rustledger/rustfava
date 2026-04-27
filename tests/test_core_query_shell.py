@@ -89,7 +89,9 @@ def test_query_errors(run_query: Callable[[str], QueryResult]) -> None:
         run_query(".run custom_query other")
     with pytest.raises(QueryNotFoundError):
         run_query(".run unknown")
-    with pytest.raises(QueryParseError):
+    # Bare-word "asdf" was a parse error in rustledger ≤0.13; v0.14 routes
+    # the same input through the compilation path. Accept either.
+    with pytest.raises((QueryParseError, QueryCompilationError)):
         run_query("asdf")
     with pytest.raises(QueryCompilationError):
         run_query("select asdf")
@@ -115,7 +117,7 @@ def test_query_to_file(
         query_shell.query_to_file(entries, "run custom_query other", "csv")
     with pytest.raises(QueryNotFoundError):
         query_shell.query_to_file(entries, "run testsetest", "csv")
-    with pytest.raises(QueryParseError):
+    with pytest.raises((QueryParseError, QueryCompilationError)):
         query_shell.query_to_file(entries, "asdf", "csv")
     with pytest.raises(QueryCompilationError):
         query_shell.query_to_file(entries, "select asdf", "csv")
