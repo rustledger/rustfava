@@ -808,7 +808,8 @@ def test_api_query_result_error(test_client: FlaskClient) -> None:
         query_string={"query_string": "nononono"},
     )
     msg = assert_api_error(response)
-    assert "Query parse error" in msg
+    # rustledger ≤0.13 → "Query parse error"; v0.14 → "Query compilation error".
+    assert "Query parse error" in msg or "Query compilation error" in msg
 
 
 def test_api_commodities_empty(
