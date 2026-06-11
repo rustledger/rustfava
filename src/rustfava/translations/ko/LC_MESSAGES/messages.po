@@ -29,11 +29,11 @@ msgstr "다음"
 
 #: frontend/src/charts/ConversionAndInterval.svelte:17
 msgid "At Cost"
-msgstr "취득 원가"
+msgstr "취득원가"
 
 #: frontend/src/charts/ConversionAndInterval.svelte:19
 msgid "At Market Value"
-msgstr "시장 가치"
+msgstr "시장가치"
 
 #: frontend/src/charts/ConversionAndInterval.svelte:21
 #: frontend/src/reports/journal/JournalHeaders.svelte:53
@@ -181,11 +181,11 @@ msgstr "계속 추가"
 #: frontend/src/modals/Context.svelte:36 frontend/src/modals/Context.svelte:40
 #: frontend/src/modals/EntryContextBalances.svelte:25
 msgid "Context"
-msgstr "관련 내역"
+msgstr "관련내역"
 
 #: frontend/src/modals/DocumentUpload.svelte:167
 msgid "Upload file(s)"
-msgstr "파일 업로드"
+msgstr "파일업로드"
 
 #: frontend/src/modals/DocumentUpload.svelte:169
 msgid "Files"
@@ -193,7 +193,7 @@ msgstr "파일"
 
 #: frontend/src/modals/DocumentUpload.svelte:184
 msgid "Documents folder"
-msgstr "문서 폴더"
+msgstr "문서폴더"
 
 #: frontend/src/modals/DocumentUpload.svelte:195
 #: frontend/src/reports/import/ImportFileUpload.svelte:35
@@ -228,12 +228,12 @@ msgstr "오류"
 
 #: frontend/src/reports/accounts/AccountReport.svelte:55
 msgid "Journal of all entries for this Account and Sub-Accounts"
-msgstr "이 계정 및 하위 계정의 전체 저널"
+msgstr "이 계정 및 하위 계정의 전체 거래기록"
 
 #: frontend/src/reports/accounts/AccountReport.svelte:57
 #: frontend/src/reports/accounts/AccountReport.svelte:60
 msgid "Account Journal"
-msgstr "계정 거래 내역"
+msgstr "계정별거래기록"
 
 #: frontend/src/reports/accounts/AccountReport.svelte:66
 #: frontend/src/reports/accounts/AccountReport.svelte:69
@@ -361,7 +361,7 @@ msgstr "이벤트 없음."
 #: frontend/src/reports/holdings/index.ts:92
 #: frontend/src/sidebar/AsideContents.svelte:45
 msgid "Holdings"
-msgstr "보유 자산"
+msgstr "보유자산"
 
 #: frontend/src/reports/holdings/Holdings.svelte:25
 #: frontend/src/reports/holdings/Holdings.svelte:28
@@ -370,12 +370,12 @@ msgstr "보유 자산"
 #: frontend/src/reports/holdings/Holdings.svelte:45
 #: frontend/src/reports/holdings/Holdings.svelte:48
 msgid "Holdings by"
-msgstr "보유 자산 분류:"
+msgstr "보유자산분류"
 
 #: frontend/src/reports/holdings/Holdings.svelte:45
 #: frontend/src/reports/holdings/Holdings.svelte:49
 msgid "Cost currency"
-msgstr "취득 통화"
+msgstr "취득통화"
 
 #: frontend/src/reports/holdings/Holdings.svelte:56
 #: frontend/src/reports/query/index.ts:16
@@ -392,7 +392,7 @@ msgstr "가져오기"
 
 #: frontend/src/reports/import/Extract.svelte:76
 msgid "ignore duplicate"
-msgstr "중복 무시"
+msgstr "중복무시"
 
 #: frontend/src/reports/import/Extract.svelte:120
 msgid "Source"
@@ -465,11 +465,11 @@ msgstr "메타데이터"
 
 #: frontend/src/reports/journal/JournalFilters.svelte:43
 msgid "Toggle metadata"
-msgstr "메타데이터 표시 전환"
+msgstr "메타데이터 토글"
 
 #: frontend/src/reports/journal/JournalFilters.svelte:44
 msgid "Toggle postings"
-msgstr "분개 표시 전환"
+msgstr "분개 토글"
 
 #: frontend/src/reports/journal/JournalHeaders.svelte:40
 msgid "F"
@@ -487,15 +487,15 @@ msgstr "변동"
 #: frontend/src/reports/journal/index.ts:58
 #: frontend/src/sidebar/AsideContents.svelte:30
 msgid "Journal"
-msgstr "저널"
+msgstr "거래기록"
 
 #: frontend/src/reports/options/Options.svelte:13
 msgid "Color scheme"
-msgstr "색상 테마"
+msgstr "색상테마"
 
 #: frontend/src/reports/options/Options.svelte:20
 msgid "Fava options"
-msgstr "Fava 옵션"
+msgstr "Fava설정"
 
 #: frontend/src/reports/options/Options.svelte:21
 msgid "help"
@@ -503,11 +503,11 @@ msgstr "도움말"
 
 #: frontend/src/reports/options/Options.svelte:25
 msgid "Beancount options"
-msgstr "Beancount 옵션"
+msgstr "Beancount설정"
 
 #: frontend/src/reports/query/QueryEditor.svelte:21
 msgid "…enter a BQL query. 'help' to list available commands."
-msgstr "…BQL 쿼리를 입력하세요. 'help'로 명령 목록 확인."
+msgstr "…BQL 쿼리를 입력하세요. 사용 가능한 명령어를 보려면 'help'를 입력하세요."
 
 #: frontend/src/reports/query/QueryEditor.svelte:40
 msgid "Submit"
@@ -515,7 +515,7 @@ msgstr "실행"
 
 #: frontend/src/reports/query/QueryLinks.svelte:21
 msgid "Download as"
-msgstr "다운로드"
+msgstr "파일내려받기"
 
 #: frontend/src/reports/statistics/EntriesByType.svelte:14
 msgid "Type"
@@ -523,7 +523,7 @@ msgstr "유형"
 
 #: frontend/src/reports/statistics/EntriesByType.svelte:15
 msgid "# Entries"
-msgstr "항목 수"
+msgstr "거래수"
 
 #: frontend/src/reports/statistics/EntriesByType.svelte:41
 msgid "Total"
@@ -531,17 +531,17 @@ msgstr "합계"
 
 #: frontend/src/reports/statistics/Statistics.svelte:22
 msgid "Postings per Account"
-msgstr "계정별 분개 수"
+msgstr "계정별분개수"
 
 #: frontend/src/reports/statistics/Statistics.svelte:32
 msgid "Update Activity"
-msgstr "업데이트 활동"
+msgstr "최근수정이력"
 
 #: frontend/src/reports/statistics/Statistics.svelte:35
 msgid ""
 "Click to copy balance directives for accounts (except green ones) to the "
 "clipboard."
-msgstr "계정 잔액 지시문을 클립보드에 복사합니다 (녹색 계정 제외)."
+msgstr "클립보드에 계정 잔액검증 지시어를 복사하려면 클릭하세요 (녹색 제외)."
 
 #: frontend/src/reports/statistics/Statistics.svelte:40
 msgid "Copy balance directives"
@@ -549,11 +549,11 @@ msgstr "잔액 지시문 복사"
 
 #: frontend/src/reports/statistics/Statistics.svelte:47
 msgid "Entries per Type"
-msgstr "유형별 항목 수"
+msgstr "유형별거래수"
 
 #: frontend/src/reports/statistics/UpdateActivity.svelte:36
 msgid "Last Entry"
-msgstr "최근 항목"
+msgstr "최근거래"
 
 #: frontend/src/reports/statistics/index.ts:37
 #: frontend/src/sidebar/AsideContents.svelte:54
@@ -568,20 +568,20 @@ msgstr "손익계산서"
 #: frontend/src/reports/tree_reports/index.ts:49
 #: frontend/src/sidebar/AsideContents.svelte:28
 msgid "Balance Sheet"
-msgstr "대차대조표"
+msgstr "재무상태표"
 
 #: frontend/src/reports/tree_reports/index.ts:63
 #: frontend/src/sidebar/AsideContents.svelte:29
 msgid "Trial Balance"
-msgstr "합계잔액시산표"
+msgstr "시산표"
 
 #: frontend/src/sidebar/AccountSelector.svelte:22
 msgid "Go to account"
-msgstr "계정으로 이동"
+msgstr "계정이동"
 
 #: frontend/src/sidebar/AsideContents.svelte:61
 msgid "Add Journal Entry"
-msgstr "거래 추가"
+msgstr "거래기록추가"
 
 #: frontend/src/sidebar/AsideContents.svelte:76 src/fava/templates/help.html:3
 msgid "Help"
@@ -589,56 +589,56 @@ msgstr "도움말"
 
 #: frontend/src/sidebar/FilterForm.svelte:87
 msgid "Time"
-msgstr "기간"
+msgstr "조회기간"
 
 #: frontend/src/sidebar/FilterForm.svelte:109
 msgid "Filter by tag, payee, …"
-msgstr "태그, 거래처 등으로 필터링"
+msgstr "태그, 거래처 등으로 필터링…"
 
 #: frontend/src/stores/accounts.ts:113 src/fava/json_api.py:682
 #: src/fava/json_api.py:700
 msgid "Net Profit"
-msgstr "순이익"
+msgstr "당기순이익"
 
 #: frontend/src/stores/chart.ts:28
 msgid "Treemap"
-msgstr "트리맵"
+msgstr "사각계층그래프"
 
 #: frontend/src/stores/chart.ts:29
 msgid "Sunburst"
-msgstr "선버스트"
+msgstr "원형계층그래프"
 
 #: frontend/src/stores/chart.ts:30
 msgid "Icicle"
-msgstr "아이시클"
+msgstr "수직계층그래프"
 
 #: frontend/src/stores/chart.ts:43
 msgid "Line chart"
-msgstr "선형 차트"
+msgstr "꺾은선그래프"
 
 #: frontend/src/stores/chart.ts:44
 msgid "Area chart"
-msgstr "영역 차트"
+msgstr "면적그래프"
 
 #: frontend/src/stores/chart.ts:57
 msgid "Stacked Bars"
-msgstr "누적 막대"
+msgstr "누적막대그래프"
 
 #: frontend/src/stores/chart.ts:58
 msgid "Single Bars"
-msgstr "단일 막대"
+msgstr "단일막대그래프"
 
 #: frontend/src/stores/color_scheme.ts:15
 msgid "System"
-msgstr "시스템"
+msgstr "시스템설정"
 
 #: frontend/src/stores/color_scheme.ts:16
 msgid "Dark"
-msgstr "어둡게"
+msgstr "어두운테마"
 
 #: frontend/src/stores/color_scheme.ts:17
 msgid "Light"
-msgstr "밝게"
+msgstr "밝은테마"
 
 #: frontend/src/tree-table/AccountCellHeader.svelte:23
 msgid ""
@@ -650,11 +650,11 @@ msgstr ""
 
 #: frontend/src/tree-table/AccountCellHeader.svelte:34
 msgid "Expand all accounts"
-msgstr "모든 계정 펼치기"
+msgstr "모든계정펼치기"
 
 #: frontend/src/tree-table/AccountCellHeader.svelte:39
 msgid "Expand all"
-msgstr "모두 펼치기"
+msgstr "모두펼치기"
 
 #: frontend/src/tree-table/TreeTable.svelte:41
 msgid "Other"
@@ -662,7 +662,7 @@ msgstr "기타"
 
 #: src/fava/internal_api.py:171
 msgid "Account Balance"
-msgstr "계정 잔액"
+msgstr "계정잔액"
 
 #: src/fava/internal_api.py:219
 msgid "Net Worth"
@@ -674,8 +674,8 @@ msgstr "수익"
 
 #: src/fava/json_api.py:694
 msgid "Expenses"
-msgstr "지출"
+msgstr "비용"
 
 #: src/fava/templates/help.html:8
 msgid "Help pages"
-msgstr "도움말 페이지"
+msgstr "도움말페이지"
