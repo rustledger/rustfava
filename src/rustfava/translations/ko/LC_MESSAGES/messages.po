@@ -297,7 +297,7 @@ msgstr "금액 정렬"
 
 #: frontend/src/reports/editor/EditorMenu.svelte:62
 msgid "Toggle Comment (selection)"
-msgstr "선택 영역 주석 처리 전환"
+msgstr "선택영역 주석 처리 전환"
 
 #: frontend/src/reports/editor/EditorMenu.svelte:68
 msgid "Open all folds"
