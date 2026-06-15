@@ -131,7 +131,13 @@ def _convert_row_value(value: Any, column: dict[str, str]) -> Any:
             currency = units.get("currency", "")
             number = units.get("number", "0")
             if currency:
-                result[currency] = Decimal(number)
+                # Sum across lots: an inventory may hold several positions of
+                # the same currency at different cost bases (now that the
+                # serializer preserves cost). Flattening to {currency: number}
+                # must accumulate, not overwrite, or all but one lot is lost.
+                result[currency] = result.get(currency, Decimal(0)) + Decimal(
+                    number
+                )
         return result
 
     return value
