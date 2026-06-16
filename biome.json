@@ -3,7 +3,6 @@
   "files": {
     "includes": [
       "**",
-      "!docs/templates/**/*.html",
       "!src/rustfava/**/*.html",
       "!desktop/**/*.html",
       "!tests/__snapshots__",
