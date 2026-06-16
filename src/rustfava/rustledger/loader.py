@@ -34,7 +34,8 @@ def _sort_entries(entries: list[Directive]) -> list[Directive]:
     """Sort directives by (date, type, lineno), as beancount does."""
 
     def key(entry: Directive) -> tuple[object, int, int]:
-        lineno = (entry.meta or {}).get("lineno", 0)
+        raw_lineno = (entry.meta or {}).get("lineno", 0)
+        lineno = raw_lineno if isinstance(raw_lineno, int) else 0
         return (entry.date, _ENTRY_SORT_ORDER.get(type(entry), 0), lineno)
 
     return sorted(entries, key=key)
