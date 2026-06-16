@@ -21,6 +21,7 @@ mirroring the JSON-RPC surface's tagged unions.
 from __future__ import annotations
 
 import os
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -58,31 +59,84 @@ def _default_wasm_path() -> Path:
     return Path(__file__).parent / "rustledger_ffi_component.wasm"
 
 
-def _marshal(value: Any, vtype: Any) -> Any:  # noqa: PLR0911
+def _snake(name: str) -> str:
+    """WIT identifiers are kebab-case; the JSON-RPC surface is snake_case."""
+    return name.replace("-", "_")
+
+
+def _is_pair_list(vtype: Any) -> bool:
+    """Whether ``vtype`` is ``list<tuple<_, _>>`` (WIT's string-keyed map)."""
+    return (
+        isinstance(vtype, ListType)
+        and isinstance(vtype.element, TupleType)
+        and len(vtype.element.elements) == 2
+    )
+
+
+def _unwrap_meta_value(value: Any) -> Any:
+    """Flatten a marshalled ``meta-value`` variant to its scalar/plain form.
+
+    User metadata values are a ``meta-value`` variant (text/number/boolean/
+    amount/...). The JSON-RPC surface emitted them as plain scalars (or, for
+    amounts, a bare ``{number, currency}`` object), not discriminated unions —
+    so unwrap to match. (Directive and query-cell variants stay tagged.)
+    """
+    if isinstance(value, dict) and "type" in value:
+        if set(value) == {"type", "value"}:
+            return value["value"]
+        return {k: v for k, v in value.items() if k != "type"}
+    return value
+
+
+def _marshal(value: Any, vtype: Any) -> Any:  # noqa: PLR0911, PLR0912
     """Convert a component value into plain Python, driven by its WIT type.
 
-    `Record` -> ``dict`` of marshalled fields; `Variant` -> ``{"type": case,
-    ...}`` (the payload's fields when it is a record, else ``{"type": case,
-    "value": ...}``, or just ``{"type": case}`` for a unit case); `list` ->
-    ``list``; `option`/`result`/`tuple` unwrap; primitives pass through.
+    Output matches the JSON-RPC engine's shapes so the same downstream
+    (``loader``/``types``/``options``) parses both backends identically:
+
+    - `Record` -> ``dict`` with **snake_case** keys (WIT names are kebab-case).
+      A ``user`` field (``meta``'s user-metadata map) is **flattened** into the
+      parent, mirroring the JSON-RPC ``Meta``'s ``#[serde(flatten)]``.
+    - `Variant` -> ``{"type": <snake case>, ...}`` (discriminated; record
+      payloads spread, other payloads under ``"value"``, unit cases bare).
+    - `list<tuple<string, V>>` -> ``dict`` (WIT has no map type; the JSON-RPC
+      surface emitted these — ``display-precision``, ``meta.user``, … — as
+      objects). Other lists -> ``list``.
+    - `option`/`result`/`tuple` unwrap; `enum`/primitives pass through.
     """
     if isinstance(vtype, RecordType):
-        return {
-            name: _marshal(getattr(value, name), ftype)
-            for name, ftype in vtype.fields
-        }
+        out: dict[str, Any] = {}
+        for name, ftype in vtype.fields:
+            marshalled = _marshal(getattr(value, name), ftype)
+            if name == "user" and isinstance(marshalled, dict):
+                # `meta.user` carries arbitrary user metadata; the JSON-RPC
+                # `Meta` flattened it into the meta object (scalar values), so
+                # do the same.
+                out.update(
+                    {k: _unwrap_meta_value(v) for k, v in marshalled.items()}
+                )
+            else:
+                out[_snake(name)] = marshalled
+        return out
     if isinstance(vtype, VariantType):
         cases = dict(vtype.cases)
         tag = value.tag
         payload_type = cases.get(tag)
+        out_tag = _snake(tag)
         if payload_type is None or value.payload is None:
-            return {"type": tag}
+            return {"type": out_tag}
         payload = _marshal(value.payload, payload_type)
         if isinstance(payload, dict):
-            return {"type": tag, **payload}
-        return {"type": tag, "value": payload}
+            return {"type": out_tag, **payload}
+        return {"type": out_tag, "value": payload}
     if isinstance(vtype, ListType):
-        return [_marshal(item, vtype.element) for item in value]
+        items = [_marshal(item, vtype.element) for item in value]
+        if _is_pair_list(vtype) and all(
+            isinstance(p, list) and len(p) == 2 and isinstance(p[0], str)
+            for p in items
+        ):
+            return {p[0]: p[1] for p in items}
+        return items
     if isinstance(vtype, OptionType):
         return None if value is None else _marshal(value, vtype.payload)
     if isinstance(vtype, TupleType):
@@ -90,15 +144,23 @@ def _marshal(value: Any, vtype: Any) -> Any:  # noqa: PLR0911
             _marshal(v, t) for v, t in zip(value, vtype.elements, strict=False)
         ]
     if isinstance(vtype, ResultType):
-        # Errors surface as exceptions in wasmtime-py; a plain value is Ok.
-        return value
-    # Fallback: an un-typed Record/Variant, or a primitive.
+        # `result<ok, err>` lifts to a Variant(tag="ok"|"err"); wasmtime-py
+        # does NOT raise. Surface `err` as an exception, unwrap `ok`.
+        if value.tag == "err":
+            err = _marshal(value.payload, vtype.err) if vtype.err else None
+            msg = str(err) if err is not None else "component error"
+            raise RustledgerError(msg)
+        return _marshal(value.payload, vtype.ok) if vtype.ok else None
+    # Fallback: an un-typed Record/Variant, an enum (lifts to str), or a
+    # primitive.
     if isinstance(value, Record):
         return {
-            k: getattr(value, k) for k in dir(value) if not k.startswith("_")
+            _snake(k): getattr(value, k)
+            for k in dir(value)
+            if not k.startswith("_")
         }
     if isinstance(value, Variant):
-        return {"type": value.tag, "value": value.payload}
+        return {"type": _snake(value.tag), "value": value.payload}
     return value
 
 
@@ -125,6 +187,11 @@ class RustledgerComponentEngine:
         self._store, self._inst = self._instantiate()
         self._iface_cache: dict[str, Any] = {}
         self._version_checked = False
+        # The shared store/instance is reused across source-based calls and
+        # wasmtime's `Store` is not concurrency-safe; serialize access since
+        # Fava serves requests on multiple threads. (`load_full` uses a fresh
+        # per-call instance and needs no lock.)
+        self._lock = threading.Lock()
 
     # -- instantiation -----------------------------------------------------
 
@@ -160,8 +227,11 @@ class RustledgerComponentEngine:
     # -- typed calls -------------------------------------------------------
 
     def _call(self, iface: str, func_name: str, args: list[Any]) -> Any:
-        """Call ``iface.func_name(*args)`` on the shared instance."""
-        return self._call_on(self._store, self._inst, iface, func_name, args)
+        """Call ``iface.func_name(*args)`` on the shared instance (locked)."""
+        with self._lock:
+            return self._call_on(
+                self._store, self._inst, iface, func_name, args
+            )
 
     def _call_on(
         self,
@@ -190,7 +260,11 @@ class RustledgerComponentEngine:
         return self._call(_LEDGER, "version", [])
 
     def load(self, source: str, filename: str = "<stdin>") -> dict[str, Any]:  # noqa: ARG002
-        """Parse + book ``source``; returns entries/errors/options/...."""
+        """Parse + book ``source``; returns entries/errors/options/....
+
+        ``filename`` is accepted for API parity with the JSON-RPC engine; the
+        WIT ``load(source)`` has no filename param, so it is unused here.
+        """
         self._ensure_version()
         return self._call(_LEDGER, "load", [source])
 

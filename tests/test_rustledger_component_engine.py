@@ -11,21 +11,20 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import pytest
 
 pytest.importorskip("wasmtime")
 
-if TYPE_CHECKING:
-    from rustfava.rustledger.component_engine import RustledgerComponentEngine
+# Imported after `importorskip` so the module skips cleanly when the optional
+# `wasmtime` dependency is absent (the component engine imports it eagerly).
+from rustfava.rustledger.component_engine import _default_wasm_path
+from rustfava.rustledger.component_engine import RustledgerComponentEngine
+from rustfava.rustledger.options import options_from_json
+from rustfava.rustledger.types import directives_from_json
 
 
 def _component_available() -> bool:
-    from rustfava.rustledger.component_engine import (  # noqa: PLC0415
-        _default_wasm_path,
-    )
-
     return _default_wasm_path().exists()
 
 
@@ -37,10 +36,6 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture(scope="module")
 def engine() -> RustledgerComponentEngine:
-    from rustfava.rustledger.component_engine import (  # noqa: PLC0415
-        RustledgerComponentEngine,
-    )
-
     return RustledgerComponentEngine()
 
 
@@ -94,3 +89,51 @@ def test_load_full_resolves_includes(
         result = engine.load_full(str(Path(d, "main.bean")))
     assert result["errors"] == []
     assert len(result["entries"]) >= 2  # include resolved over WASI preopen
+
+
+# Source with multi-word WIT fields that exercise the marshaller's kebab->snake
+# key mapping, the list<tuple>->map conversion, and meta-user flattening.
+SRC_RICH = (
+    'option "operating_currency" "USD"\n'
+    "2024-01-01 open Assets:Cash USD\n"
+    "2024-01-01 open Expenses:Food USD\n"
+    '2024-01-02 * "Cafe" "Coffee"\n'
+    '  category: "dining"\n'
+    "  Expenses:Food  5 USD\n"
+    "  Assets:Cash\n"
+    '2024-01-03 custom "fava-option" "indent" "2"\n'
+)
+
+
+def test_options_marshal_parses_downstream(
+    engine: RustledgerComponentEngine,
+) -> None:
+    """``options`` must use snake_case keys and map shapes that
+    ``options_from_json`` accepts (kebab keys / list<tuple> would crash it)."""
+    result = engine.load(SRC_RICH)
+    opts = result["options"]
+    # snake_case key (WIT field is ``operating-currency``).
+    assert opts["operating_currency"] == ["USD"]
+    # ``display-precision`` is a WIT list<tuple<string,u32>> -> must marshal to
+    # a dict so ``options_from_json``'s ``.items()`` does not raise.
+    assert isinstance(opts.get("display_precision", {}), dict)
+    # The whole object must round-trip through the real downstream parser.
+    parsed = options_from_json(opts)
+    assert "USD" in parsed["operating_currency"]
+
+
+def test_entries_marshal_parse_downstream(
+    engine: RustledgerComponentEngine,
+) -> None:
+    """Marshalled entries must parse via ``directives_from_json`` and carry
+    flattened user metadata (the JSON-RPC ``meta`` shape)."""
+    result = engine.load(SRC_RICH)
+    entries = list(directives_from_json(result["entries"]))
+    assert entries  # parses without KeyError
+
+    txn = next(e for e in result["entries"] if e["type"] == "transaction")
+    # meta.user is flattened into meta (not nested under a "user" key).
+    assert txn["meta"]["category"] == "dining"
+    assert "user" not in txn["meta"]
+    # multi-word fields survive as snake_case where present.
+    assert "lineno" in txn["meta"]
