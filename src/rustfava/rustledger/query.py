@@ -130,7 +130,7 @@ def _convert_row_value(value: Any, column: dict[str, str]) -> Any:
         # scalar amounts). Preserving cost lots here would require the engine to
         # emit cost per position first; see rustledger/rustfava#155.
         positions = value.get("positions", [])
-        result = {}
+        result: dict[str, Decimal] = {}
         for pos in positions:
             units = pos.get("units", {})
             currency = units.get("currency", "")

@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import datetime
 from decimal import Decimal
+from typing import cast
+from typing import TYPE_CHECKING
 
 from rustfava.beans import create
 from rustfava.rustledger.query import _convert_row_value
@@ -17,6 +19,11 @@ from rustfava.rustledger.query import _entries_to_source
 from rustfava.rustledger.types import RLCustom
 from rustfava.rustledger.types import RLCustomValue
 from rustfava.rustledger.types import RLOpen
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from rustfava.beans.abc import Directive
 
 
 def test_entries_to_source_preserves_transaction_tags_links_and_metadata() -> None:
@@ -107,7 +114,10 @@ def test_entries_to_source_preserves_open_booking_method() -> None:
         booking="STRICT",
     )
 
-    source = _entries_to_source([opn])
+    # rustledger ``RL*`` directives are a parallel hierarchy to ``abc.Directive``
+    # that ``_entries_to_source``/``to_string`` accept via singledispatch
+    # duck-typing; cast to satisfy the static signature.
+    source = _entries_to_source(cast("Sequence[Directive]", [opn]))
 
     assert "open Assets:US:Brokerage" in source
     assert '"STRICT"' in source
@@ -129,7 +139,9 @@ def test_entries_to_source_skips_fava_custom_directives() -> None:
         values=(RLCustomValue("Expenses:Food", dtype=str),),
     )
 
-    source = _entries_to_source([fava_custom, other_custom])
+    source = _entries_to_source(
+        cast("Sequence[Directive]", [fava_custom, other_custom])
+    )
 
     assert "fava-option" not in source
     assert "budget" in source

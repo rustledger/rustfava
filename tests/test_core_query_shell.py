@@ -8,12 +8,12 @@ import pytest
 
 from rustfava.core.query import QueryResultTable
 from rustfava.core.query import QueryResultText
+from rustfava.core.query_shell import _numberify_rows
 from rustfava.core.query_shell import NonExportableQueryError
 from rustfava.core.query_shell import QueryCompilationError
 from rustfava.core.query_shell import QueryNotFoundError
 from rustfava.core.query_shell import QueryParseError
 from rustfava.core.query_shell import TooManyRunArgsError
-from rustfava.core.query_shell import _numberify_rows
 from rustfava.util import excel
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -141,7 +141,7 @@ def test_numberify_rows_renders_inventory_as_amount_strings() -> None:
     as "<number> <currency>" parts, sorted and comma-joined for multi-currency
     inventories -- not the Python dict repr it used to emit.
     """
-    rows = [
+    rows: list[tuple[object, ...]] = [
         ({"USD": Decimal("502.25")},),
         ({"ITOT": Decimal("60")},),
         ({"USD": Decimal("5"), "EUR": Decimal("3")},),
