@@ -1,14 +1,21 @@
 @import "@xterm/xterm/css/xterm.css";
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
 
-html, body {
+html,
+body {
   height: 100%;
   overflow: hidden;
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+    sans-serif;
   background: #0f172a;
   color: #e8e8e8;
   display: flex;
@@ -159,8 +166,14 @@ body {
 }
 
 @keyframes slideIn {
-  from { opacity: 0; transform: translateX(-20px); }
-  to { opacity: 1; transform: translateX(0); }
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .sidebar-header {
@@ -244,20 +257,33 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
-  background: radial-gradient(ellipse at top, #1e2a4a 0%, #0f172a 50%, #020617 100%);
+  background: radial-gradient(
+    ellipse at top,
+    #1e2a4a 0%,
+    #0f172a 50%,
+    #020617 100%
+  );
   position: relative;
 }
 
 .welcome-main::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
   background:
-    radial-gradient(circle at 20% 80%, rgba(249, 115, 22, 0.03) 0%, transparent 50%),
-    radial-gradient(circle at 80% 20%, rgba(249, 115, 22, 0.02) 0%, transparent 40%);
+    radial-gradient(
+      circle at 20% 80%,
+      rgba(249, 115, 22, 0.03) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      circle at 80% 20%,
+      rgba(249, 115, 22, 0.02) 0%,
+      transparent 40%
+    );
   pointer-events: none;
 }
 
@@ -271,8 +297,14 @@ body {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .logo-icon {
@@ -284,8 +316,13 @@ body {
 }
 
 @keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
 }
 
 .logo {
@@ -334,13 +371,18 @@ body {
 }
 
 .open-btn::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: -100%;
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.15),
+    transparent
+  );
   transition: left 0.5s;
 }
 
@@ -418,7 +460,9 @@ body {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Terminal Panel */
@@ -456,7 +500,7 @@ body {
 }
 
 .terminal-resize-handle::after {
-  content: '';
+  content: "";
   width: 40px;
   height: 3px;
   background: #475569;
@@ -535,6 +579,7 @@ body {
 }
 
 .terminal-body .xterm-viewport {
+  /* biome-ignore lint/complexity/noImportantStyles: override xterm.js inline overflow. */
   overflow-y: auto !important;
 }
 
@@ -595,7 +640,7 @@ body {
 }
 
 .terminal-list-item.active::before {
-  content: '';
+  content: "";
   position: absolute;
   left: 0;
   top: 4px;
