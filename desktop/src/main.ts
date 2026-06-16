@@ -4,7 +4,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
-import { spawn, Pty } from "tauri-pty";
+import { spawn, type Pty } from "tauri-pty";
 
 // Constants
 const STORAGE_KEY = "rustfava_recent_files";
@@ -38,7 +38,7 @@ interface TerminalInstance {
 // State
 let tabs: TabInfo[] = [];
 let activeTabId: string | null = null;
-let terminals: TerminalInstance[] = [];
+const terminals: TerminalInstance[] = [];
 let activeTerminalId: string | null = null;
 let terminalVisible = false;
 let terminalHeight = 300;
@@ -107,7 +107,7 @@ async function addRecentFile(path: string) {
   // Normalize path to prevent duplicates from different representations
   try {
     const normalized = await invoke<string>("normalize_path", { path });
-    let recent = getRecentFiles().filter((p) => p !== normalized);
+    const recent = getRecentFiles().filter((p) => p !== normalized);
     recent.unshift(normalized);
     saveRecentFiles(recent);
     renderRecentFiles();
@@ -127,7 +127,9 @@ async function renderRecentFiles() {
   }
 
   // Filter to only existing files
-  const recent = await invoke<string[]>("filter_existing_paths", { paths: stored });
+  const recent = await invoke<string[]>("filter_existing_paths", {
+    paths: stored,
+  });
 
   // Update storage if some files were removed
   if (recent.length !== stored.length) {
@@ -144,7 +146,7 @@ async function renderRecentFiles() {
     .map((path) => {
       const name = path.split("/").pop();
       const dir = path.split("/").slice(0, -1).join("/");
-      const shortDir = dir.length > 40 ? "..." + dir.slice(-37) : dir;
+      const shortDir = dir.length > 40 ? `...${dir.slice(-37)}` : dir;
       return `
       <li class="recent-item" data-path="${path}">
         <div class="file-icon">&#128196;</div>
@@ -172,7 +174,7 @@ function renderTabs() {
       <span class="tab-name" title="${tab.path}">${tab.name}</span>
       <span class="tab-close" data-id="${tab.tab_id}">&times;</span>
     </div>
-  `
+  `,
     )
     .join("");
 
@@ -213,8 +215,8 @@ function renderTabs() {
 function renderTabContents() {
   const existingIds = new Set(
     [...tabContentsEl.querySelectorAll(".tab-content")].map(
-      (el) => (el as HTMLElement).dataset.id
-    )
+      (el) => (el as HTMLElement).dataset.id,
+    ),
   );
 
   tabs.forEach((tab) => {
@@ -238,7 +240,7 @@ function renderTabContents() {
   tabContentsEl.querySelectorAll(".tab-content").forEach((el) => {
     el.classList.toggle(
       "active",
-      (el as HTMLElement).dataset.id === activeTabId
+      (el as HTMLElement).dataset.id === activeTabId,
     );
   });
 }
@@ -318,7 +320,7 @@ async function openPath(path: string) {
     }, 500);
   } catch (err) {
     console.error("Failed to open file:", err);
-    alert("Failed to open file: " + err);
+    alert(`Failed to open file: ${err}`);
   } finally {
     loadingEl.classList.add("hidden");
   }
@@ -366,7 +368,7 @@ function getShellName(shellPath: string): string {
   return shellPath.split("/").pop() || "terminal";
 }
 
-function createTerminalInstance(cwd: string): TerminalInstance {
+function createTerminalInstance(_cwd: string): TerminalInstance {
   const id = `term_${++terminalIdCounter}`;
 
   // Create container element
@@ -434,18 +436,36 @@ async function spawnPtyForTerminal(instance: TerminalInstance, cwd: string) {
 
     // Show welcome message with available commands
     instance.terminal.write("\r\n");
-    instance.terminal.write("  \x1b[1m\x1b[38;5;208mrustfava terminal\x1b[0m\r\n");
+    instance.terminal.write(
+      "  \x1b[1m\x1b[38;5;208mrustfava terminal\x1b[0m\r\n",
+    );
     instance.terminal.write("  \x1b[38;5;245m─────────────────\x1b[0m\r\n");
     instance.terminal.write("\r\n");
-    instance.terminal.write("  \x1b[36mrledger check\x1b[0m   - Validate beancount files\r\n");
-    instance.terminal.write("  \x1b[36mrledger query\x1b[0m   - Query ledger with BQL\r\n");
-    instance.terminal.write("  \x1b[36mrledger format\x1b[0m  - Format beancount files\r\n");
-    instance.terminal.write("  \x1b[36mrledger doctor\x1b[0m  - Diagnose issues in ledger\r\n");
-    instance.terminal.write("  \x1b[36mrledger report\x1b[0m  - Generate reports\r\n");
-    instance.terminal.write("  \x1b[36mrledger price\x1b[0m   - Fetch price quotes\r\n");
-    instance.terminal.write("  \x1b[36mrledger extract\x1b[0m - Extract transactions\r\n");
+    instance.terminal.write(
+      "  \x1b[36mrledger check\x1b[0m   - Validate beancount files\r\n",
+    );
+    instance.terminal.write(
+      "  \x1b[36mrledger query\x1b[0m   - Query ledger with BQL\r\n",
+    );
+    instance.terminal.write(
+      "  \x1b[36mrledger format\x1b[0m  - Format beancount files\r\n",
+    );
+    instance.terminal.write(
+      "  \x1b[36mrledger doctor\x1b[0m  - Diagnose issues in ledger\r\n",
+    );
+    instance.terminal.write(
+      "  \x1b[36mrledger report\x1b[0m  - Generate reports\r\n",
+    );
+    instance.terminal.write(
+      "  \x1b[36mrledger price\x1b[0m   - Fetch price quotes\r\n",
+    );
+    instance.terminal.write(
+      "  \x1b[36mrledger extract\x1b[0m - Extract transactions\r\n",
+    );
     instance.terminal.write("\r\n");
-    instance.terminal.write("  \x1b[38;5;245mRun any command with --help for usage info\x1b[0m\r\n");
+    instance.terminal.write(
+      "  \x1b[38;5;245mRun any command with --help for usage info\x1b[0m\r\n",
+    );
     instance.terminal.write("\r\n");
 
     // Run rledger check on the current file after a short delay
@@ -471,7 +491,9 @@ async function spawnPtyForTerminal(instance: TerminalInstance, cwd: string) {
     });
 
     instance.pty.onExit(({ exitCode }) => {
-      instance.terminal.write(`\r\n\x1b[90m[Process exited with code ${exitCode}]\x1b[0m\r\n`);
+      instance.terminal.write(
+        `\r\n\x1b[90m[Process exited with code ${exitCode}]\x1b[0m\r\n`,
+      );
       instance.pty = null;
       instance.name = `${instance.name} (exited)`;
       renderTerminalList();
@@ -492,7 +514,9 @@ async function spawnPtyForTerminal(instance: TerminalInstance, cwd: string) {
     });
   } catch (err) {
     console.error("Failed to spawn terminal:", err);
-    instance.terminal.write(`\x1b[31mFailed to spawn terminal: ${err}\x1b[0m\r\n`);
+    instance.terminal.write(
+      `\x1b[31mFailed to spawn terminal: ${err}\x1b[0m\r\n`,
+    );
   }
 }
 
@@ -505,15 +529,17 @@ function renderTerminalList() {
       <span class="terminal-name" data-id="${t.id}">${t.name}</span>
       <span class="terminal-close" data-id="${t.id}">&times;</span>
     </div>
-  `
+  `,
     )
     .join("");
 
   // Add click handlers
   terminalList.querySelectorAll(".terminal-list-item").forEach((el) => {
     el.addEventListener("click", (e) => {
-      if (!(e.target as HTMLElement).classList.contains("terminal-close") &&
-          !(e.target as HTMLElement).classList.contains("terminal-name-input")) {
+      if (
+        !(e.target as HTMLElement).classList.contains("terminal-close") &&
+        !(e.target as HTMLElement).classList.contains("terminal-name-input")
+      ) {
         switchTerminal((el as HTMLElement).dataset.id!);
       }
     });
@@ -708,15 +734,15 @@ document.addEventListener("mousemove", (e) => {
   const delta = startY - e.clientY;
   terminalHeight = Math.max(
     150,
-    Math.min(window.innerHeight - 100, startHeight + delta)
+    Math.min(window.innerHeight - 100, startHeight + delta),
   );
-  terminalPanel.style.height = terminalHeight + "px";
+  terminalPanel.style.height = `${terminalHeight}px`;
 
   // Update tab content bottom offset
   const tabContents = document.querySelectorAll(".tab-content");
   tabContents.forEach((el) => {
     if (terminalVisible) {
-      (el as HTMLElement).style.bottom = terminalHeight + "px";
+      (el as HTMLElement).style.bottom = `${terminalHeight}px`;
     }
   });
 
@@ -742,7 +768,7 @@ async function openExampleFile() {
     await openPath(path);
   } catch (err) {
     console.error("Failed to open example file:", err);
-    alert("Failed to open example file: " + err);
+    alert(`Failed to open example file: ${err}`);
   }
 }
 
@@ -765,8 +791,9 @@ listen("menu-close-tab", () => {
 });
 listen("menu-reload", () => {
   const iframe = tabContentsEl.querySelector(
-    `.tab-content[data-id="${activeTabId}"] iframe`
+    `.tab-content[data-id="${activeTabId}"] iframe`,
   ) as HTMLIFrameElement;
+  // biome-ignore lint/correctness/noSelfAssign: re-assigning src reloads the iframe (intentional).
   if (iframe) iframe.src = iframe.src;
 });
 listen("menu-toggle-terminal", () => {

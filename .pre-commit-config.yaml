@@ -22,7 +22,9 @@ repos:
     rev: v2.3.12
     hooks:
       - id: biome-check
-        args: ["--error-on-warnings"]
+        # No `--error-on-warnings`: biome.json deliberately sets noExplicitAny /
+        # noNonNullAssertion to "warn" (informational), so the hook must not
+        # escalate every warning to a blocking error. Errors still block.
 
   - repo: local
     hooks:

@@ -7,21 +7,37 @@
  * Use --main to build from the main branch instead.
  */
 
-import { execSync, spawnSync } from "child_process";
-import { existsSync, readFileSync, mkdirSync, writeFileSync, cpSync } from "fs";
-import { join, dirname } from "path";
+import { execSync, spawnSync } from "node:child_process";
+import {
+  existsSync,
+  readFileSync,
+  mkdirSync,
+  writeFileSync,
+  cpSync,
+} from "node:fs";
+import { join, dirname } from "node:path";
 
 const ROOT_DIR = join(dirname(import.meta.dir), "..");
 const CACHE_DIR = join(ROOT_DIR, ".cache", "rustledger");
 const BINARIES_DIR = join(dirname(import.meta.dir), "src-tauri", "binaries");
-const WASM_PATH = join(ROOT_DIR, "src", "rustfava", "rustledger", "rustledger-wasi.wasm");
-const WASM_VERSION_PATH = join(ROOT_DIR, "src", "rustfava", "rustledger", ".wasm-version");
+const WASM_PATH = join(
+  ROOT_DIR,
+  "src",
+  "rustfava",
+  "rustledger",
+  "rustledger-wasi.wasm",
+);
+const WASM_VERSION_PATH = join(
+  ROOT_DIR,
+  "src",
+  "rustfava",
+  "rustledger",
+  ".wasm-version",
+);
 const RUSTLEDGER_REPO = "https://github.com/rustledger/rustledger.git";
 
 // CLI binaries to build
-const CLI_BINARIES = [
-  "rledger"
-];
+const CLI_BINARIES = ["rledger"];
 
 function getTargetTriple(): string {
   try {
@@ -37,12 +53,18 @@ function getTargetTriple(): string {
 function getGitRef(dir: string): string | null {
   try {
     // Try to get tag first, fall back to commit
-    const tag = execSync("git describe --tags --exact-match 2>/dev/null || true", {
-      cwd: dir,
-      encoding: "utf-8"
-    }).trim();
+    const tag = execSync(
+      "git describe --tags --exact-match 2>/dev/null || true",
+      {
+        cwd: dir,
+        encoding: "utf-8",
+      },
+    ).trim();
     if (tag) return tag;
-    return execSync("git rev-parse HEAD", { cwd: dir, encoding: "utf-8" }).trim();
+    return execSync("git rev-parse HEAD", {
+      cwd: dir,
+      encoding: "utf-8",
+    }).trim();
   } catch {
     return null;
   }
@@ -53,12 +75,12 @@ function getLatestTag(): string {
     // Get latest v* tag from remote
     const output = execSync(
       `git ls-remote --tags --sort=-v:refname ${RUSTLEDGER_REPO} "v*" | head -1`,
-      { encoding: "utf-8" }
+      { encoding: "utf-8" },
     );
     const match = output.match(/refs\/tags\/(v[^\s^]+)/);
     if (match) return match[1];
     throw new Error("No tags found");
-  } catch (err) {
+  } catch (_err) {
     console.error("Failed to get latest tag, falling back to main");
     return "main";
   }
@@ -69,10 +91,15 @@ function cloneRepo(ref: string): string {
   mkdirSync(dirname(CACHE_DIR), { recursive: true });
 
   if (ref === "main") {
-    execSync(`git clone --depth 1 -b main ${RUSTLEDGER_REPO} ${CACHE_DIR}`, { stdio: "inherit" });
+    execSync(`git clone --depth 1 -b main ${RUSTLEDGER_REPO} ${CACHE_DIR}`, {
+      stdio: "inherit",
+    });
   } else {
     // For tags, clone then checkout the tag
-    execSync(`git clone --depth 1 --branch ${ref} ${RUSTLEDGER_REPO} ${CACHE_DIR}`, { stdio: "inherit" });
+    execSync(
+      `git clone --depth 1 --branch ${ref} ${RUSTLEDGER_REPO} ${CACHE_DIR}`,
+      { stdio: "inherit" },
+    );
   }
   return getGitRef(CACHE_DIR) || "unknown";
 }
@@ -87,11 +114,20 @@ function switchToRef(ref: string): string {
 
   // Fetch the ref
   if (ref === "main") {
-    execSync("git fetch --depth 1 origin main", { cwd: CACHE_DIR, stdio: "inherit" });
+    execSync("git fetch --depth 1 origin main", {
+      cwd: CACHE_DIR,
+      stdio: "inherit",
+    });
     execSync("git checkout main", { cwd: CACHE_DIR, stdio: "inherit" });
-    execSync("git reset --hard origin/main", { cwd: CACHE_DIR, stdio: "inherit" });
+    execSync("git reset --hard origin/main", {
+      cwd: CACHE_DIR,
+      stdio: "inherit",
+    });
   } else {
-    execSync(`git fetch --depth 1 origin tag ${ref}`, { cwd: CACHE_DIR, stdio: "inherit" });
+    execSync(`git fetch --depth 1 origin tag ${ref}`, {
+      cwd: CACHE_DIR,
+      stdio: "inherit",
+    });
     execSync(`git checkout ${ref}`, { cwd: CACHE_DIR, stdio: "inherit" });
   }
 
@@ -100,7 +136,9 @@ function switchToRef(ref: string): string {
 
 function ensureRepo(useMain: boolean, forceUpdate: boolean): string {
   const targetRef = useMain ? "main" : getLatestTag();
-  console.log(`Target: ${targetRef}${useMain ? " (main branch)" : " (latest release)"}`);
+  console.log(
+    `Target: ${targetRef}${useMain ? " (main branch)" : " (latest release)"}`,
+  );
 
   if (!existsSync(CACHE_DIR)) {
     return cloneRepo(targetRef);
@@ -132,7 +170,9 @@ function needsWasmBuild(currentCommit: string): boolean {
   }
   const builtCommit = readVersionFile(WASM_VERSION_PATH);
   if (builtCommit !== currentCommit) {
-    console.log(`WASM outdated (built: ${builtCommit?.slice(0, 8)}, current: ${currentCommit.slice(0, 8)})`);
+    console.log(
+      `WASM outdated (built: ${builtCommit?.slice(0, 8)}, current: ${currentCommit.slice(0, 8)})`,
+    );
     return true;
   }
   return false;
@@ -152,7 +192,9 @@ function needsCliBuild(currentCommit: string, targetTriple: string): boolean {
 
   const builtCommit = readVersionFile(versionFile);
   if (builtCommit !== currentCommit) {
-    console.log(`CLI outdated (built: ${builtCommit?.slice(0, 8)}, current: ${currentCommit.slice(0, 8)})`);
+    console.log(
+      `CLI outdated (built: ${builtCommit?.slice(0, 8)}, current: ${currentCommit.slice(0, 8)})`,
+    );
     return true;
   }
   return false;
@@ -165,15 +207,21 @@ function buildWasm(currentCommit: string): void {
   spawnSync("rustup", ["target", "add", "wasm32-wasip1"], { stdio: "pipe" });
 
   // Build the FFI WASI crate specifically
-  const result = spawnSync("cargo", [
-    "build",
-    "--target", "wasm32-wasip1",
-    "--release",
-    "-p", "rustledger-ffi-wasi"
-  ], {
-    cwd: CACHE_DIR,
-    stdio: "inherit"
-  });
+  const result = spawnSync(
+    "cargo",
+    [
+      "build",
+      "--target",
+      "wasm32-wasip1",
+      "--release",
+      "-p",
+      "rustledger-ffi-wasi",
+    ],
+    {
+      cwd: CACHE_DIR,
+      stdio: "inherit",
+    },
+  );
 
   if (result.status !== 0) {
     console.error("Failed to build WASM");
@@ -181,7 +229,13 @@ function buildWasm(currentCommit: string): void {
   }
 
   // Copy WASM file (binary name matches crate name)
-  const wasmSource = join(CACHE_DIR, "target", "wasm32-wasip1", "release", "rustledger-ffi-wasi.wasm");
+  const wasmSource = join(
+    CACHE_DIR,
+    "target",
+    "wasm32-wasip1",
+    "release",
+    "rustledger-ffi-wasi.wasm",
+  );
   cpSync(wasmSource, WASM_PATH);
   writeFileSync(WASM_VERSION_PATH, currentCommit);
   console.log(`WASM built successfully (commit: ${currentCommit.slice(0, 8)})`);
@@ -193,7 +247,7 @@ function buildCli(currentCommit: string, targetTriple: string): void {
   // Build
   const result = spawnSync("cargo", ["build", "--release"], {
     cwd: CACHE_DIR,
-    stdio: "inherit"
+    stdio: "inherit",
   });
 
   if (result.status !== 0) {
@@ -214,7 +268,9 @@ function buildCli(currentCommit: string, targetTriple: string): void {
   // Write version file
   const versionFile = join(BINARIES_DIR, `.cli-version-${targetTriple}`);
   writeFileSync(versionFile, currentCommit);
-  console.log(`CLI binaries built successfully (commit: ${currentCommit.slice(0, 8)})`);
+  console.log(
+    `CLI binaries built successfully (commit: ${currentCommit.slice(0, 8)})`,
+  );
 }
 
 async function main() {
