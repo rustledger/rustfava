@@ -64,6 +64,12 @@ excel =[
 beancount-compat = [
     "beancount>=2,<4",
 ]
+# Experimental in-process engine driving the rustledger WASI Preview 2 /
+# Component-Model component (rustledger #1384), selected via
+# RUSTFAVA_RUSTLEDGER_BACKEND=component. Default remains the JSON-RPC engine.
+component = [
+    "wasmtime>=45,<46",
+]
 
 [dependency-groups]
 # Building the documentation website with MkDocs.
