@@ -33,6 +33,7 @@ from wasmtime import Engine
 from wasmtime import FilePerms
 from wasmtime import Store
 from wasmtime import WasiConfig
+from wasmtime.component import Bool
 from wasmtime.component import Component
 from wasmtime.component import Linker
 from wasmtime.component import ListType
@@ -40,6 +41,7 @@ from wasmtime.component import OptionType
 from wasmtime.component import Record
 from wasmtime.component import RecordType
 from wasmtime.component import ResultType
+from wasmtime.component import String
 from wasmtime.component import TupleType
 from wasmtime.component import Variant
 from wasmtime.component import VariantType
@@ -143,6 +145,56 @@ def _cost_number_to_json(value: Any, vtype: Any) -> dict[str, Any]:
     return {"kind": kind, "value": payload}
 
 
+def _is_typed_value(vtype: Any) -> bool:
+    """Whether ``vtype`` is the WIT ``typed-value`` record (custom args)."""
+    return isinstance(vtype, RecordType) and (
+        frozenset(name for name, _ in vtype.fields)
+        == frozenset({"value-type", "value"})
+    )
+
+
+def _typed_value_to_json(value: Any, vtype: Any) -> dict[str, Any]:
+    """Marshal a ``typed-value`` to the JSON-RPC ``{type, value}`` shape.
+
+    rustledger's ``TypedValue`` serializes the ``value-type`` field as ``type``
+    and carries the bare value (amount as ``{number, currency}``), which Fava's
+    ``RLCustomValue.from_raw`` reads. The generic record marshalling would emit
+    ``{value_type, value: {type: ...}}`` instead.
+    """
+    fields = dict(vtype.fields)
+    value_type = _marshal(getattr(value, "value-type"), fields["value-type"])
+    payload = _marshal(value.value, fields["value"])
+    return {"type": value_type, "value": _unwrap_meta_value(payload)}
+
+
+def _typed_value_from_json(value: Any, vtype: Any) -> Any:
+    """Rebuild a ``typed-value`` Record from the ``{type, value}`` shape.
+
+    The inverse of :func:`_typed_value_to_json`, for clamp/filter inputs whose
+    ``custom`` directives carry typed argument values.
+    """
+    vt = value.get("type", "string")
+    payload = value.get("value")
+    if vt == "amount" and isinstance(payload, dict):
+        mv: dict[str, Any] = {
+            "type": "amount",
+            "number": str(payload.get("number")),
+            "currency": payload.get("currency"),
+        }
+    elif vt == "number":
+        mv = {"type": "number", "value": str(payload)}
+    elif vt == "bool":
+        mv = {"type": "boolean", "value": bool(payload)}
+    elif vt == "null" or payload is None:
+        mv = {"type": "null"}
+    else:  # string/account/currency/tag/link/date all collapse to text
+        mv = {"type": "text", "value": str(payload)}
+    rec: Any = Record()
+    setattr(rec, "value-type", str(vt))
+    rec.value = _unmarshal(mv, dict(vtype.fields)["value"])
+    return rec
+
+
 def _cost_number_from_json(value: Any) -> Any:
     """Rebuild a ``cost-number`` Variant from the JSON-RPC / `types.py` shape.
 
@@ -192,6 +244,8 @@ def _marshal(value: Any, vtype: Any) -> Any:  # noqa: PLR0911, PLR0912
     - `option`/`result`/`tuple` unwrap; `enum`/primitives pass through.
     """
     if isinstance(vtype, RecordType):
+        if _is_typed_value(vtype):
+            return _typed_value_to_json(value, vtype)
         out: dict[str, Any] = {}
         for name, ftype in vtype.fields:
             marshalled = _marshal(getattr(value, name), ftype)
@@ -287,17 +341,27 @@ def _meta_value_json(value: Any) -> dict[str, Any]:
 
 
 def _default_for(vtype: Any) -> Any:
-    """A benign default for a record field absent from the input dict."""
+    """A benign default for a record field absent from the input dict.
+
+    ``directives_to_json`` omits fields the loader fills in (e.g. the meta
+    hash); the JSON-RPC engine relies on serde defaults, so we must supply
+    type-appropriate zero values rather than ``None`` (which wasmtime rejects).
+    """
     if isinstance(vtype, OptionType):
         return None
     if isinstance(vtype, ListType):
         return []
     if isinstance(vtype, RecordType):
         return _unmarshal({}, vtype)
-    return None
+    if isinstance(vtype, String):
+        return ""
+    if isinstance(vtype, Bool):
+        return False
+    # Remaining scalars are numeric (u32 lineno, s64, floats).
+    return 0
 
 
-def _unmarshal(value: Any, vtype: Any) -> Any:  # noqa: PLR0911
+def _unmarshal(value: Any, vtype: Any) -> Any:  # noqa: PLR0911, PLR0912
     """Convert plain Python into a typed component value (inverse of _marshal).
 
     Takes a value in :func:`_marshal`'s output shape and rebuilds the typed
@@ -310,6 +374,8 @@ def _unmarshal(value: Any, vtype: Any) -> Any:  # noqa: PLR0911
     re-nested and re-tagged via :func:`_meta_value_json`.
     """
     if isinstance(vtype, RecordType):
+        if _is_typed_value(vtype):
+            return _typed_value_from_json(value, vtype)
         rec = Record()
         src = value if isinstance(value, dict) else {}
         non_user = {_snake(n) for n, _ in vtype.fields if n != "user"}
@@ -528,13 +594,36 @@ class RustledgerComponentEngine:
         store, inst = self._instantiate(
             preopen=(str(host_path.parent), "/work"),
         )
-        return self._call_on(
+        result = self._call_on(
             store,
             inst,
             _LEDGER,
             "load-file",
             [guest_path, allow_unrestricted_includes, plugins or []],
         )
+        # The component sees files under the WASI pre-open mount (``/work``),
+        # so the directives it returns carry guest paths in ``meta.filename``
+        # (and the include list). Map them back to real host paths — Fava opens
+        # these files for editing, so a ``/work/...`` path would not exist.
+        self._rewrite_guest_paths(result, host_path.parent)
+        return result
+
+    @staticmethod
+    def _rewrite_guest_paths(result: dict[str, Any], host_dir: Path) -> None:
+        """Rewrite ``/work/...`` guest paths in a load result to host paths."""
+
+        def to_host(p: Any) -> Any:
+            if isinstance(p, str) and p.startswith("/work/"):
+                return str(host_dir / p[len("/work/") :])
+            return p
+
+        for entry in result.get("entries", []):
+            meta = entry.get("meta")
+            if isinstance(meta, dict) and "filename" in meta:
+                meta["filename"] = to_host(meta["filename"])
+        for include in result.get("includes", []):
+            if isinstance(include, dict) and "path" in include:
+                include["path"] = to_host(include["path"])
 
     def clamp_entries(
         self,
