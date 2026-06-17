@@ -141,11 +141,30 @@ def _unwrap_query_value(cell: Any) -> Any:  # noqa: PLR0911
     if kind == "amount":
         return {"number": cell["number"], "currency": cell["currency"]}
     if kind == "inventory":
-        return {"positions": cell["value"]}
+        return {"positions": [_drop_none(p) for p in cell["value"]]}
+    if kind == "position":
+        return _drop_none({k: v for k, v in cell.items() if k != "type"})
     if kind == "json":
         return json.loads(cell["value"])
-    # position / interval / metadata: drop the discriminator, keep the fields.
+    # interval / metadata: drop the discriminator, keep the fields.
     return {k: v for k, v in cell.items() if k != "type"}
+
+
+def _drop_none(obj: Any) -> Any:
+    """Drop ``None``-valued keys and sort keys to match ``value_to_json``.
+
+    ``value_to_json`` omits absent ``cost``/``date``/``label`` (rather than
+    emitting ``None``), and serde serializes maps alphabetically (``BTreeMap``)
+    — so a position cell stringifies as ``{currency, number}``. Mirror both so
+    object cells render identically to the JSON-RPC surface.
+    """
+    if isinstance(obj, dict):
+        return {
+            k: _drop_none(v) for k, v in sorted(obj.items()) if v is not None
+        }
+    if isinstance(obj, list):
+        return [_drop_none(v) for v in obj]
+    return obj
 
 
 def _finalize_query_result(result: dict[str, Any]) -> dict[str, Any]:

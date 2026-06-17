@@ -112,10 +112,11 @@ def _errors_from_json(
         if "source" in err:
             source = err["source"]
             err_filename = source.get("filename", filename)
-            err_lineno = source.get("lineno", 0)
+            err_lineno = source.get("lineno") or 0
         else:
             err_filename = err.get("filename", filename)
-            err_lineno = err.get("line", 0)
+            # `line` is `option<u32>` on the component: present-but-None.
+            err_lineno = err.get("line") or 0
 
         result.append(
             BeancountError(
