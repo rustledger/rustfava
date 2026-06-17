@@ -20,6 +20,7 @@ mirroring the JSON-RPC surface's tagged unions.
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 import threading
@@ -117,6 +118,44 @@ def _is_pair_list(vtype: Any) -> bool:
 def _pair_value_type(vtype: Any) -> Any:
     """The value type ``V`` of a ``list<tuple<string, V>>`` (a WIT map)."""
     return vtype.element.elements[1]
+
+
+def _unwrap_query_value(cell: Any) -> Any:  # noqa: PLR0911
+    """Project a marshalled query cell to the JSON-RPC ``value_to_json`` shape.
+
+    ``RLCursor`` / the API serializer read that shape. The generic marshaller
+    renders each cell as ``{"type": <case>, ...}``; rustledger's
+    ``value_to_json`` instead emits bare values (text/bool/int as scalars,
+    ``number`` as ``{number}``, ``inventory`` as ``{positions: [...]}``, etc.).
+    Mirror it so query rows are consumable downstream.
+    """
+    if not isinstance(cell, dict) or "type" not in cell:
+        return cell
+    kind = cell["type"]
+    if kind == "null":
+        return None
+    if kind in {"boolean", "integer", "text", "date", "string_set"}:
+        return cell["value"]
+    if kind == "number":
+        return {"number": cell["value"]}
+    if kind == "amount":
+        return {"number": cell["number"], "currency": cell["currency"]}
+    if kind == "inventory":
+        return {"positions": cell["value"]}
+    if kind == "json":
+        return json.loads(cell["value"])
+    # position / interval / metadata: drop the discriminator, keep the fields.
+    return {k: v for k, v in cell.items() if k != "type"}
+
+
+def _finalize_query_result(result: dict[str, Any]) -> dict[str, Any]:
+    """Unwrap every query-value cell in a query result's rows in place."""
+    rows = result.get("rows")
+    if isinstance(rows, list):
+        result["rows"] = [
+            [_unwrap_query_value(cell) for cell in row] for row in rows
+        ]
+    return result
 
 
 # The WIT ``cost-number`` variant. rustledger's JSON surface tags this one by
@@ -548,7 +587,9 @@ class RustledgerComponentEngine:
     def query(self, source: str, query_string: str) -> dict[str, Any]:
         """Run a BQL query over ``source``; returns columns/rows/errors."""
         self._ensure_version()
-        return self._call(_LEDGER, "query", [source, query_string])
+        return _finalize_query_result(
+            self._call(_LEDGER, "query", [source, query_string])
+        )
 
     def validate(self, source: str) -> dict[str, Any]:
         """Validate ``source``; returns ``valid`` + ``errors``."""
@@ -691,7 +732,9 @@ class RustledgerComponentEngine:
             entries_type = func.type(self._store).params[0][1]
             wit_entries = _unmarshal(list(entries_json), entries_type)
             raw = func(self._store, wit_entries, query_string)
-            return _marshal(raw, func.type(self._store).result)
+            return _finalize_query_result(
+                _marshal(raw, func.type(self._store).result)
+            )
 
     # -- stateful ledger handle (WIT `resource session`, rustfava #173) -----
 
@@ -787,7 +830,9 @@ class ComponentSession:
 
     def query(self, query_string: str) -> dict[str, Any]:
         """Run a BQL query against the held ledger."""
-        return self._method("[method]session.query", query_string)
+        return _finalize_query_result(
+            self._method("[method]session.query", query_string)
+        )
 
     def filter(self, begin_date: str, end_date: str) -> list[dict[str, Any]]:
         """Keep only directives within ``[begin, end)``."""
