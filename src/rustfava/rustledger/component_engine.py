@@ -669,6 +669,110 @@ class RustledgerComponentEngine:
             raw = func(self._store, wit_entries, begin_date, end_date)
             return _marshal(raw, func.type(self._store).result)
 
+    # -- stateful ledger handle (WIT `resource session`, rustfava #173) -----
+
+    def open_session(self, source: str) -> ComponentSession:
+        """Load + book ``source`` into a held ledger session.
+
+        The returned :class:`ComponentSession` keeps the booked ledger inside
+        the component; its ``query``/``filter``/``clamp`` run server-side with
+        no re-parse and no directive round-trip.
+        """
+        self._ensure_version()
+        store, inst = self._instantiate()
+        fidx = self._component.get_export_index(
+            "[constructor]session", self._iface(_LEDGER)
+        )
+        handle = inst.get_func(store, fidx)(store, source)
+        return ComponentSession(self, store, inst, handle)
+
+    def open_session_file(
+        self,
+        path: str,
+        *,
+        allow_unrestricted_includes: bool = False,
+        plugins: list[str] | None = None,
+    ) -> ComponentSession:
+        """Like :meth:`open_session`, but load from a file path.
+
+        Runs on a dedicated instance with the file's directory pre-opened into
+        the WASI sandbox (matching :meth:`load_full`); the session maps the
+        ``/work`` guest paths back to host paths in ``info()``.
+        """
+        self._ensure_version()
+        host_path = Path(path).resolve()
+        store, inst = self._instantiate(
+            preopen=(str(host_path.parent), "/work"),
+        )
+        fidx = self._component.get_export_index(
+            "[static]session.from-file", self._iface(_LEDGER)
+        )
+        handle = inst.get_func(store, fidx)(
+            store,
+            f"/work/{host_path.name}",
+            allow_unrestricted_includes,
+            plugins or [],
+        )
+        return ComponentSession(self, store, inst, handle, host_path.parent)
+
+
+class ComponentSession:
+    """A loaded, booked ledger held inside the component (WIT ``session``).
+
+    Created by :meth:`RustledgerComponentEngine.open_session` /
+    :meth:`~RustledgerComponentEngine.open_session_file`. ``query``/``filter``/
+    ``clamp`` run against the held ledger server-side — no re-parse of source,
+    no directive list shuttled across the FFI. Each session owns its own
+    wasmtime store/instance (the resource handle is bound to them), so a file
+    session can keep its WASI pre-open and sessions don't contend on one store.
+    """
+
+    def __init__(
+        self,
+        engine: RustledgerComponentEngine,
+        store: Store,
+        inst: Any,
+        handle: Any,
+        host_dir: Path | None = None,
+    ) -> None:
+        self._engine = engine
+        self._store = store
+        self._inst = inst
+        self._handle = handle
+        self._host_dir = host_dir
+        self._lock = threading.Lock()
+
+    def _method(self, name: str, *args: Any) -> Any:
+        idx = self._engine._component.get_export_index(  # noqa: SLF001
+            name,
+            self._engine._iface(_LEDGER),  # noqa: SLF001
+        )
+        with self._lock:
+            func = self._inst.get_func(self._store, idx)
+            raw = func(self._store, self._handle, *args)
+            return _marshal(raw, func.type(self._store).result)
+
+    def info(self) -> dict[str, Any]:
+        """The load result (entries/errors/options/plugins/includes)."""
+        result: dict[str, Any] = self._method("[method]session.info")
+        if self._host_dir is not None:
+            RustledgerComponentEngine._rewrite_guest_paths(  # noqa: SLF001
+                result, self._host_dir
+            )
+        return result
+
+    def query(self, query_string: str) -> dict[str, Any]:
+        """Run a BQL query against the held ledger."""
+        return self._method("[method]session.query", query_string)
+
+    def filter(self, begin_date: str, end_date: str) -> list[dict[str, Any]]:
+        """Keep only directives within ``[begin, end)``."""
+        return self._method("[method]session.filter", begin_date, end_date)
+
+    def clamp(self, begin_date: str, end_date: str) -> list[dict[str, Any]]:
+        """Clamp to ``[begin, end)`` with opening-balance synthesis."""
+        return self._method("[method]session.clamp", begin_date, end_date)
+
 
 _INSTANCE: RustledgerComponentEngine | None = None
 

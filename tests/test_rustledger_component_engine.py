@@ -323,6 +323,48 @@ def test_clamp_preserves_custom_typed_values(
     } in (custom["values"])
 
 
+def test_open_session_runs_query_filter_clamp(
+    engine: RustledgerComponentEngine,
+) -> None:
+    """`open_session` holds the booked ledger; query/filter/clamp run against
+    it server-side (no re-parse, no directive round-trip), and clamp keeps the
+    cost basis (it runs on the held core directives)."""
+    session = engine.open_session(SRC_CLAMP)
+
+    info = session.info()
+    assert info["errors"] == []
+    assert len(info["entries"]) == len(engine.load(SRC_CLAMP)["entries"])
+
+    q = session.query("SELECT account, position")
+    assert q["errors"] == []
+    assert q["rows"]
+
+    kept = session.filter(_CLAMP_BEGIN, _CLAMP_END)
+    narrs = [e.get("narration") for e in kept if e["type"] == "transaction"]
+    assert "Coffee" in narrs
+    assert "Old" not in narrs
+
+    clamped = session.clamp(_CLAMP_BEGIN, _CLAMP_END)
+    coffee = next(e for e in clamped if e.get("narration") == "Coffee")
+    assert coffee["postings"][0]["cost"]["number"] == {
+        "kind": "per_unit",
+        "value": "2",
+    }
+
+
+def test_open_session_file_returns_host_paths(
+    engine: RustledgerComponentEngine,
+    tmp_path: Path,
+) -> None:
+    """A file-loaded session resolves WASI guest paths back to host paths in
+    `info()`, just like `load_full`."""
+    main = tmp_path / "main.bean"
+    main.write_text("2024-01-01 open Assets:Cash USD\n")
+    session = engine.open_session_file(str(main))
+    info = session.info()
+    assert {e["meta"]["filename"] for e in info["entries"]} == {str(main)}
+
+
 def test_missing_wasm_download_fallback_errors(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
