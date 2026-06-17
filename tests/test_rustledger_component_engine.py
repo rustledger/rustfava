@@ -18,8 +18,10 @@ pytest.importorskip("wasmtime")
 
 # Imported after `importorskip` so the module skips cleanly when the optional
 # `wasmtime` dependency is absent (the component engine imports it eagerly).
+from rustfava.rustledger import component_engine
 from rustfava.rustledger.component_engine import _default_wasm_path
 from rustfava.rustledger.component_engine import RustledgerComponentEngine
+from rustfava.rustledger.engine import RustledgerError
 from rustfava.rustledger.options import options_from_json
 from rustfava.rustledger.types import directives_from_json
 
@@ -137,3 +139,26 @@ def test_entries_marshal_parse_downstream(
     assert "user" not in txn["meta"]
     # multi-word fields survive as snake_case where present.
     assert "lineno" in txn["meta"]
+
+
+def test_missing_wasm_download_fallback_errors(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A missing wasm whose download fails surfaces a clear build-from-source
+    error (e.g. when the pinned release predates the component artifact)."""
+    monkeypatch.delenv("RUSTLEDGER_COMPONENT_WASM", raising=False)
+    missing = tmp_path / "absent.wasm"
+    monkeypatch.setattr(
+        component_engine,
+        "_default_wasm_path",
+        lambda: missing,
+    )
+    # Simulate a failed/404 download that leaves no file behind.
+    monkeypatch.setattr(
+        component_engine,
+        "_download_component_wasm",
+        lambda _p: None,
+    )
+    with pytest.raises(RustledgerError, match="wasm32-wasip2"):
+        component_engine.RustledgerComponentEngine()
