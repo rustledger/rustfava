@@ -75,8 +75,10 @@ def test_query(engine: RustledgerComponentEngine) -> None:
     result = engine.query(SRC, "SELECT account, position")
     assert [c["name"] for c in result["columns"]] == ["account", "position"]
     assert len(result["rows"]) >= 1
-    # Each cell is a discriminated ``{"type": ...}`` value.
-    assert result["rows"][0][0]["type"] == "text"
+    # Query cells are unwrapped to the JSON-RPC `value_to_json` shape: a text
+    # cell is a bare string, not a discriminated `{"type": ...}` dict.
+    assert isinstance(result["rows"][0][0], str)
+    assert result["rows"][0][0] in {"Assets:Cash", "Expenses:Food"}
 
 
 def test_get_account_type(engine: RustledgerComponentEngine) -> None:
