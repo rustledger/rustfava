@@ -117,6 +117,49 @@ def _pair_value_type(vtype: Any) -> Any:
     return vtype.element.elements[1]
 
 
+# The WIT ``cost-number`` variant. rustledger's JSON surface tags this one by
+# ``kind`` (``#[serde(tag = "kind")]`` on ``CostNumber``), not by the generic
+# ``type`` the marshaller uses for every other variant — and ``per-unit-from-
+# total`` spreads its two values as ``per_unit``/``total`` rather than a
+# ``value`` tuple. `types.py`'s ``cost_number_values`` reads exactly that
+# shape, so the cost basis is silently dropped if we emit the generic form.
+_COST_NUMBER_CASES = frozenset({"per-unit", "total", "per-unit-from-total"})
+
+
+def _is_cost_number(vtype: Any) -> bool:
+    """Whether ``vtype`` is the WIT ``cost-number`` variant."""
+    return isinstance(vtype, VariantType) and (
+        frozenset(name for name, _ in vtype.cases) == _COST_NUMBER_CASES
+    )
+
+
+def _cost_number_to_json(value: Any, vtype: Any) -> dict[str, Any]:
+    """Marshal a ``cost-number`` to the ``kind``-tagged JSON-RPC shape."""
+    payload = _marshal(value.payload, dict(vtype.cases)[value.tag])
+    kind = _snake(value.tag)
+    if value.tag == "per-unit-from-total":
+        per_unit, total = payload
+        return {"kind": kind, "per_unit": per_unit, "total": total}
+    return {"kind": kind, "value": payload}
+
+
+def _cost_number_from_json(value: Any) -> Any:
+    """Rebuild a ``cost-number`` Variant from the JSON-RPC / `types.py` shape.
+
+    Accepts what the real caller passes: ``_cost_to_json`` emits a flat
+    per-unit string, while component-marshalled input carries the
+    ``kind``-tagged dict.
+    """
+    if isinstance(value, dict):
+        kind = value.get("kind") or value.get("type")
+        tag = _kebab(str(kind))
+        if tag == "per-unit-from-total":
+            return Variant(tag, (str(value["per_unit"]), str(value["total"])))
+        return Variant(tag, str(value["value"]))
+    # A bare scalar (``_cost_to_json``'s flat string) is a per-unit cost.
+    return Variant("per-unit", str(value))
+
+
 def _unwrap_meta_value(value: Any) -> Any:
     """Flatten a marshalled ``meta-value`` variant to its scalar/plain form.
 
@@ -163,6 +206,8 @@ def _marshal(value: Any, vtype: Any) -> Any:  # noqa: PLR0911, PLR0912
                 out[_snake(name)] = marshalled
         return out
     if isinstance(vtype, VariantType):
+        if _is_cost_number(vtype):
+            return _cost_number_to_json(value, vtype)
         cases = dict(vtype.cases)
         tag = value.tag
         payload_type = cases.get(tag)
@@ -293,6 +338,8 @@ def _unmarshal(value: Any, vtype: Any) -> Any:  # noqa: PLR0911
             )
         return rec
     if isinstance(vtype, VariantType):
+        if _is_cost_number(vtype):
+            return _cost_number_from_json(value)
         cases = dict(vtype.cases)
         tag = _kebab(value["type"])
         if tag not in cases:  # tolerate an already-kebab tag

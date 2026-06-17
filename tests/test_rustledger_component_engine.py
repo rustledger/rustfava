@@ -27,6 +27,7 @@ from rustfava.rustledger.component_engine import RustledgerComponentEngine
 from rustfava.rustledger.engine import RustledgerError
 from rustfava.rustledger.options import options_from_json
 from rustfava.rustledger.types import directives_from_json
+from rustfava.rustledger.types import directives_to_json
 
 
 def _component_available() -> bool:
@@ -181,11 +182,41 @@ def test_clamp_entries_round_trips_directives(
     assert coffee["tags"] == ["tag"]
     assert coffee["links"] == ["link"]
     cost = coffee["postings"][0]["cost"]
-    assert cost["number"] == {"type": "per_unit", "value": "2"}
+    # Cost number is `kind`-tagged (matching the JSON-RPC surface, which Fava's
+    # `cost_number_values` reads); emitting the generic `type` here silently
+    # drops the cost basis downstream.
+    assert cost["number"] == {"kind": "per_unit", "value": "2"}
     assert cost["currency"] == "USD"
 
     # Output still parses through the real downstream directive parser.
     assert list(directives_from_json(clamped))
+
+
+def test_clamp_entries_via_directives_to_json_preserves_cost(
+    engine: RustledgerComponentEngine,
+) -> None:
+    """Exercise the *real* caller's path: ``core/filters.py`` feeds
+    ``directives_to_json(entries)`` (not raw ``load`` output) into
+    ``clamp_entries``. Regression for the cost-basis loss caused by the
+    ``type`` vs ``kind`` discriminator mismatch — the round-trip below dropped
+    the cost number entirely before the fix."""
+    loaded = engine.load(SRC_CLAMP)["entries"]
+    fava_entries = list(directives_from_json(loaded))
+    prod_input = directives_to_json(fava_entries)  # what filters.py passes
+
+    # The load -> from_json -> to_json chain must keep the cost number.
+    in_coffee = next(e for e in prod_input if e.get("narration") == "Coffee")
+    assert in_coffee["postings"][0]["cost"]["number"] == "2"
+
+    clamped = engine.clamp_entries(prod_input, _CLAMP_BEGIN, _CLAMP_END)[
+        "entries"
+    ]
+    coffee = next(e for e in clamped if e.get("narration") == "Coffee")
+    assert coffee["postings"][0]["cost"]["number"] == {
+        "kind": "per_unit",
+        "value": "2",
+    }
+    assert coffee["meta"]["category"] == "groceries"
 
 
 def test_clamp_entries_synthesizes_opening_balance(
