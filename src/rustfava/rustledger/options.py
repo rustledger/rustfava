@@ -63,7 +63,7 @@ class RLDisplayFormatter:
         if self._render_commas:
             # Add thousand separators
             parts = formatted.split(".")
-            parts[0] = "{:,}".format(int(parts[0]))
+            parts[0] = f"{int(parts[0]):,}"
             formatted = ".".join(parts)
         return formatted
 
@@ -143,9 +143,10 @@ def options_from_json(data: dict[str, Any]) -> BeancountOptions:
         "name_income": data.get("name_income", "Income"),
         "name_expenses": data.get("name_expenses", "Expenses"),
         # Special accounts
-        "account_current_conversions": data.get(
-            "account_current_conversions", "Equity:Conversions:Current"
-        ),
+        # These are `option<string>` on the component surface: present-but-None
+        # (vs absent), so default on falsy, not just on missing key.
+        "account_current_conversions": data.get("account_current_conversions")
+        or "Equity:Conversions:Current",
         "account_current_earnings": data.get(
             "account_current_earnings", "Equity:Earnings:Current"
         ),
@@ -159,20 +160,21 @@ def options_from_json(data: dict[str, Any]) -> BeancountOptions:
             "account_previous_earnings", "Equity:Earnings:Previous"
         ),
         "account_rounding": data.get("account_rounding"),
-        "account_unrealized_gains": data.get(
-            "account_unrealized_gains", "Income:Unrealized"
-        ),
+        "account_unrealized_gains": data.get("account_unrealized_gains")
+        or "Income:Unrealized",
         # Booking and commodities
         "booking_method": RLBooking(data.get("booking_method", "STRICT")),
         "commodities": set(data.get("commodities", [])),
-        "conversion_currency": data.get("conversion_currency", ""),
+        "conversion_currency": data.get("conversion_currency") or "",
         "dcontext": dcontext,
         "display_precision": display_precision,
         # File handling
         "documents": list(data.get("documents", [])),
         "include": list(data.get("include", [])),
         # Tolerances
-        "infer_tolerance_from_cost": data.get("infer_tolerance_from_cost", False),
+        "infer_tolerance_from_cost": data.get(
+            "infer_tolerance_from_cost", False
+        ),
         "inferred_tolerance_default": inferred_tolerance_default,
         "inferred_tolerance_multiplier": Decimal(
             str(data.get("inferred_tolerance_multiplier", "0.5"))
