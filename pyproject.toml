@@ -64,6 +64,12 @@ excel =[
 beancount-compat = [
     "beancount>=2,<4",
 ]
+# Experimental in-process engine driving the rustledger WASI Preview 2 /
+# Component-Model component (rustledger #1384), selected via
+# RUSTFAVA_RUSTLEDGER_BACKEND=component. Default remains the JSON-RPC engine.
+component = [
+    "wasmtime>=45,<46",
+]
 
 [dependency-groups]
 # Building the documentation website with MkDocs.
@@ -145,6 +151,18 @@ follow_untyped_imports = true
 [[tool.mypy.overrides]]
 module = ["markdown2.*"]
 follow_untyped_imports = true
+
+# `wasmtime` is an optional dependency (the `component` extra), not installed
+# in the type-checking environment; treat it as untyped.
+[[tool.mypy.overrides]]
+module = ["wasmtime.*"]
+ignore_missing_imports = true
+
+# The component engine marshals values across the untyped `wasmtime` FFI
+# boundary, so its public methods legitimately return `Any`.
+[[tool.mypy.overrides]]
+module = ["rustfava.rustledger.component_engine"]
+warn_return_any = false
 
 [tool.pytest.ini_options]
 # filterwarnings = "ignore:.*locked_cached_property.*deprecated:DeprecationWarning"
