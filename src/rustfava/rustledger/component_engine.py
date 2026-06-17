@@ -24,6 +24,7 @@ import os
 import sys
 import threading
 import urllib.request
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -109,6 +110,11 @@ def _is_pair_list(vtype: Any) -> bool:
         and isinstance(vtype.element, TupleType)
         and len(vtype.element.elements) == 2
     )
+
+
+def _pair_value_type(vtype: Any) -> Any:
+    """The value type ``V`` of a ``list<tuple<string, V>>`` (a WIT map)."""
+    return vtype.element.elements[1]
 
 
 def _unwrap_meta_value(value: Any) -> Any:
@@ -199,6 +205,117 @@ def _marshal(value: Any, vtype: Any) -> Any:  # noqa: PLR0911, PLR0912
         }
     if isinstance(value, Variant):
         return {"type": _snake(value.tag), "value": value.payload}
+    return value
+
+
+def _kebab(name: str) -> str:
+    """Inverse of :func:`_snake`: snake_case (JSON-RPC) -> WIT kebab-case."""
+    return name.replace("_", "-")
+
+
+def _meta_value_json(value: Any) -> dict[str, Any]:
+    """Re-tag an unwrapped user-metadata scalar as a ``meta-value`` variant.
+
+    Inverse of :func:`_unwrap_meta_value`, mirroring rustledger's
+    ``json_to_meta_value`` (``types/input.rs``) so the reconstruction matches
+    what the JSON-RPC ``entry.clamp`` does on the Rust side: ``str`` -> text,
+    ``bool`` -> boolean, ``int``/``float``/``Decimal`` -> number, ``None`` ->
+    null, ``{number, currency}`` -> amount, anything else -> null.
+    """
+    if isinstance(value, bool):  # before int — bool is an int subclass
+        return {"type": "boolean", "value": value}
+    if isinstance(value, str):
+        return {"type": "text", "value": value}
+    if isinstance(value, (int, float, Decimal)):
+        return {"type": "number", "value": str(value)}
+    if (
+        isinstance(value, dict)
+        and value.get("number") is not None
+        and value.get("currency") is not None
+    ):
+        return {
+            "type": "amount",
+            "number": str(value["number"]),
+            "currency": value["currency"],
+        }
+    return {"type": "null"}
+
+
+def _default_for(vtype: Any) -> Any:
+    """A benign default for a record field absent from the input dict."""
+    if isinstance(vtype, OptionType):
+        return None
+    if isinstance(vtype, ListType):
+        return []
+    if isinstance(vtype, RecordType):
+        return _unmarshal({}, vtype)
+    return None
+
+
+def _unmarshal(value: Any, vtype: Any) -> Any:  # noqa: PLR0911
+    """Convert plain Python into a typed component value (inverse of _marshal).
+
+    Takes a value in :func:`_marshal`'s output shape and rebuilds the typed
+    component value of type ``vtype``.
+    Used for builder inputs: ``filter``/``clamp`` take ``list<directive>``, the
+    same type ``load`` returns, so the entries Fava already holds round-trip
+    back into the component. Records become :class:`wasmtime.component.Record`
+    (fields set by their WIT name); tagged dicts become
+    :class:`wasmtime.component.Variant`; the flattened ``meta.user`` keys are
+    re-nested and re-tagged via :func:`_meta_value_json`.
+    """
+    if isinstance(vtype, RecordType):
+        rec = Record()
+        src = value if isinstance(value, dict) else {}
+        non_user = {_snake(n) for n, _ in vtype.fields if n != "user"}
+        for name, ftype in vtype.fields:
+            if name == "user":
+                # The keys `_marshal` flattened in (everything that isn't a
+                # known `meta` field): re-nest as user metadata entries.
+                mv_type = _pair_value_type(ftype)
+                setattr(
+                    rec,
+                    name,
+                    [
+                        (k, _unmarshal(_meta_value_json(v), mv_type))
+                        for k, v in src.items()
+                        if k not in non_user
+                    ],
+                )
+                continue
+            key = _snake(name)
+            setattr(
+                rec,
+                name,
+                _unmarshal(src[key], ftype)
+                if key in src
+                else _default_for(ftype),
+            )
+        return rec
+    if isinstance(vtype, VariantType):
+        cases = dict(vtype.cases)
+        tag = _kebab(value["type"])
+        if tag not in cases:  # tolerate an already-kebab tag
+            tag = value["type"]
+        payload_type = cases[tag]
+        if payload_type is None:
+            return Variant(tag)
+        if isinstance(payload_type, RecordType):
+            payload = {k: v for k, v in value.items() if k != "type"}
+            return Variant(tag, _unmarshal(payload, payload_type))
+        return Variant(tag, _unmarshal(value["value"], payload_type))
+    if isinstance(vtype, ListType):
+        if _is_pair_list(vtype) and isinstance(value, dict):
+            vt = _pair_value_type(vtype)
+            return [(k, _unmarshal(v, vt)) for k, v in value.items()]
+        return [_unmarshal(item, vtype.element) for item in value]
+    if isinstance(vtype, OptionType):
+        return None if value is None else _unmarshal(value, vtype.payload)
+    if isinstance(vtype, TupleType):
+        return tuple(
+            _unmarshal(v, t)
+            for v, t in zip(value, vtype.elements, strict=False)
+        )
     return value
 
 
@@ -371,6 +488,50 @@ class RustledgerComponentEngine:
             "load-file",
             [guest_path, allow_unrestricted_includes, plugins or []],
         )
+
+    def clamp_entries(
+        self,
+        entries_json: list[dict[str, Any]],
+        begin_date: str,
+        end_date: str,
+    ) -> dict[str, Any]:
+        """Clamp already-loaded entries to ``[begin, end)``.
+
+        Mirrors :meth:`RustledgerEngine.clamp_entries`: synthesizes
+        opening-balance and summary directives at the window boundaries. The
+        entries are the same ``directive`` shape ``load`` emits, so they are
+        marshalled back into typed component values via :func:`_unmarshal`
+        before the call (the JSON-RPC engine instead ships the JSON and lets
+        the Rust side reconstruct — same result, different layer).
+        """
+        return {
+            "entries": self._builder_window(
+                "clamp", entries_json, begin_date, end_date
+            ),
+        }
+
+    def _builder_window(
+        self,
+        func_name: str,
+        entries_json: list[dict[str, Any]],
+        begin_date: str,
+        end_date: str,
+    ) -> list[dict[str, Any]]:
+        """Run a ``builder`` window op (``filter``/``clamp``) on entries.
+
+        Custom input marshalling means this can't reuse :meth:`_call`; it holds
+        the shared-store lock around the whole call (typed in, marshalled out).
+        """
+        self._ensure_version()
+        with self._lock:
+            fidx = self._component.get_export_index(
+                func_name, self._iface(_BUILDER)
+            )
+            func = self._inst.get_func(self._store, fidx)
+            entries_type = func.type(self._store).params[0][1]
+            wit_entries = _unmarshal(list(entries_json), entries_type)
+            raw = func(self._store, wit_entries, begin_date, end_date)
+            return _marshal(raw, func.type(self._store).result)
 
 
 _INSTANCE: RustledgerComponentEngine | None = None

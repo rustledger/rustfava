@@ -9,10 +9,13 @@ Build the component with::
 
 from __future__ import annotations
 
+import json
 import tempfile
 from pathlib import Path
 
 import pytest
+
+from rustfava.rustledger.engine import RustledgerEngine
 
 pytest.importorskip("wasmtime")
 
@@ -139,6 +142,96 @@ def test_entries_marshal_parse_downstream(
     assert "user" not in txn["meta"]
     # multi-word fields survive as snake_case where present.
     assert "lineno" in txn["meta"]
+
+
+# Two transactions either side of a clamp window, the in-window one carrying
+# user metadata, a tag/link, and a posting cost — the round-trip's hard cases.
+SRC_CLAMP = (
+    "2023-01-01 open Assets:Cash USD\n"
+    "2023-01-01 open Expenses:Food USD\n"
+    '2023-06-15 * "Old"\n'
+    "  Expenses:Food  5 USD\n"
+    "  Assets:Cash\n"
+    '2024-02-10 * "Coffee" #tag ^link\n'
+    '  category: "groceries"\n'
+    "  rank: 3\n"
+    "  Expenses:Food  7 USD {2 USD}\n"
+    "  Assets:Cash  -14 USD\n"
+)
+_CLAMP_BEGIN, _CLAMP_END = "2024-01-01", "2024-12-31"
+
+
+def test_clamp_entries_round_trips_directives(
+    engine: RustledgerComponentEngine,
+) -> None:
+    """``clamp_entries`` marshals already-loaded directives back into the
+    component (via ``_unmarshal``) and preserves metadata, tags, and cost."""
+    entries = engine.load(SRC_CLAMP)["entries"]
+    clamped = engine.clamp_entries(entries, _CLAMP_BEGIN, _CLAMP_END)[
+        "entries"
+    ]
+
+    # The in-window transaction survives, with user metadata, tag/link, and
+    # the posting cost intact through the dict -> typed -> dict round-trip.
+    coffee = next(e for e in clamped if e.get("narration") == "Coffee")
+    assert coffee["meta"]["category"] == "groceries"
+    # Numeric metadata round-trips as a decimal string — matching the JSON-RPC
+    # surface, which also emits `MetaValue::Number` as a string for precision.
+    assert coffee["meta"]["rank"] == "3"
+    assert coffee["tags"] == ["tag"]
+    assert coffee["links"] == ["link"]
+    cost = coffee["postings"][0]["cost"]
+    assert cost["number"] == {"type": "per_unit", "value": "2"}
+    assert cost["currency"] == "USD"
+
+    # Output still parses through the real downstream directive parser.
+    assert list(directives_from_json(clamped))
+
+
+def test_clamp_entries_synthesizes_opening_balance(
+    engine: RustledgerComponentEngine,
+) -> None:
+    """The pre-window transaction is folded into opening-balance directives at
+    the boundary rather than appearing verbatim."""
+    entries = engine.load(SRC_CLAMP)["entries"]
+    clamped = engine.clamp_entries(entries, _CLAMP_BEGIN, _CLAMP_END)[
+        "entries"
+    ]
+
+    narrations = [
+        e.get("narration") for e in clamped if e["type"] == "transaction"
+    ]
+    assert "Old" not in narrations  # the 2023 txn is summarized, not kept
+    # Opening-balance summary directives are synthesized at the window start.
+    assert any(n == "Opening balance" for n in narrations)
+    assert all(
+        e["date"] >= _CLAMP_BEGIN
+        for e in clamped
+        if e["type"] == "transaction"
+    )
+
+
+def test_clamp_entries_matches_jsonrpc_engine() -> None:
+    """Cross-engine parity: component ``clamp_entries`` must agree with the
+    JSON-RPC engine. Skipped when the wasmtime CLI (JSON-RPC backend) is
+    unavailable — the component path is still covered by the tests above."""
+    try:
+        jsonrpc = RustledgerEngine.get_instance()
+        jr_clamped = jsonrpc.clamp_entries(
+            jsonrpc.load(SRC_CLAMP)["entries"], _CLAMP_BEGIN, _CLAMP_END
+        )["entries"]
+    except Exception as exc:  # noqa: BLE001 - CLI absence is the expected skip
+        pytest.skip(f"JSON-RPC engine unavailable: {exc}")
+
+    component = RustledgerComponentEngine()
+    co_clamped = component.clamp_entries(
+        component.load(SRC_CLAMP)["entries"], _CLAMP_BEGIN, _CLAMP_END
+    )["entries"]
+
+    def _norm(entries: object) -> str:
+        return json.dumps(entries, sort_keys=True, default=str)
+
+    assert _norm(co_clamped) == _norm(jr_clamped)
 
 
 def test_missing_wasm_download_fallback_errors(
