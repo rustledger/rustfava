@@ -323,6 +323,22 @@ def test_clamp_preserves_custom_typed_values(
     } in (custom["values"])
 
 
+def test_query_entries_matches_source_query(
+    engine: RustledgerComponentEngine,
+) -> None:
+    """`query_entries` queries an already-loaded directive set directly (the
+    typed alternative to re-rendering entries to source), matching `query`."""
+    entries = engine.load(SRC)["entries"]
+    via_entries = engine.query_entries(entries, "SELECT account, position")
+    via_source = engine.query(SRC, "SELECT account, position")
+    assert via_entries["errors"] == []
+    assert via_entries["rows"]
+    assert len(via_entries["rows"]) == len(via_source["rows"])
+    assert [c["name"] for c in via_entries["columns"]] == [
+        c["name"] for c in via_source["columns"]
+    ]
+
+
 def test_open_session_runs_query_filter_clamp(
     engine: RustledgerComponentEngine,
 ) -> None:

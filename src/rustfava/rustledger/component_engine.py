@@ -669,6 +669,30 @@ class RustledgerComponentEngine:
             raw = func(self._store, wit_entries, begin_date, end_date)
             return _marshal(raw, func.type(self._store).result)
 
+    def query_entries(
+        self,
+        entries_json: list[dict[str, Any]],
+        query_string: str,
+    ) -> dict[str, Any]:
+        """Run a BQL query against already-loaded entries (no source re-parse).
+
+        Marshals the entries into typed component values and calls the
+        builder's ``query-entries`` — the typed alternative to re-rendering a
+        filtered entry set back to beancount source text (which can render
+        invalid text). Same ``columns``/``rows``/``errors`` shape as
+        :meth:`query`.
+        """
+        self._ensure_version()
+        with self._lock:
+            fidx = self._component.get_export_index(
+                "query-entries", self._iface(_BUILDER)
+            )
+            func = self._inst.get_func(self._store, fidx)
+            entries_type = func.type(self._store).params[0][1]
+            wit_entries = _unmarshal(list(entries_json), entries_type)
+            raw = func(self._store, wit_entries, query_string)
+            return _marshal(raw, func.type(self._store).result)
+
     # -- stateful ledger handle (WIT `resource session`, rustfava #173) -----
 
     def open_session(self, source: str) -> ComponentSession:

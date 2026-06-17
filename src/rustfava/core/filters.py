@@ -412,12 +412,12 @@ class TimeFilter(EntryFilter):
         self.date_range = DateRange(begin, end)
 
     def apply(self, entries: Sequence[Directive]) -> Sequence[Directive]:
-        from rustfava.rustledger.engine import RustledgerEngine
+        from rustfava.rustledger.backend import get_engine
         from rustfava.rustledger.types import directives_from_json
         from rustfava.rustledger.types import directives_to_json
 
         # Use native rustledger clamp_entries
-        engine = RustledgerEngine.get_instance()
+        engine = get_engine()
         entries_json = directives_to_json(list(entries))
         result = engine.clamp_entries(
             entries_json,

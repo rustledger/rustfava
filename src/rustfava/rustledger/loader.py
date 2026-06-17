@@ -10,7 +10,7 @@ from rustfava.beans.abc import Balance
 from rustfava.beans.abc import Close
 from rustfava.beans.abc import Document
 from rustfava.beans.abc import Open
-from rustfava.rustledger.engine import RustledgerEngine
+from rustfava.rustledger.backend import get_engine
 from rustfava.rustledger.options import options_from_json
 from rustfava.rustledger.types import cost_number_values
 from rustfava.rustledger.types import directives_from_json
@@ -41,7 +41,9 @@ def _sort_entries(entries: list[Directive]) -> list[Directive]:
     return sorted(entries, key=key)
 
 
-def _compute_display_precision(entries_json: list[dict[str, Any]]) -> dict[str, int]:
+def _compute_display_precision(
+    entries_json: list[dict[str, Any]],
+) -> dict[str, int]:
     """Compute display precision from entries.
 
     This is a workaround until rustledger FFI returns display_precision
@@ -78,14 +80,14 @@ def _compute_display_precision(entries_json: list[dict[str, Any]]) -> dict[str, 
                     value = per_unit if per_unit is not None else total
                     if value is not None:
                         track_amount(
-                            {"number": str(value), "currency": cost.get("currency")}
+                            {
+                                "number": str(value),
+                                "currency": cost.get("currency"),
+                            }
                         )
                 track_amount(posting.get("price"))
 
-        elif entry_type == "balance":
-            track_amount(entry.get("amount"))
-
-        elif entry_type == "price":
+        elif entry_type == "balance" or entry_type == "price":
             track_amount(entry.get("amount"))
 
     # Get most common precision for each currency
@@ -204,7 +206,11 @@ def _run_plugins(
                     else:
                         all_errors.append(
                             BeancountError(
-                                source=getattr(err, "source", {"filename": "<plugin>", "lineno": 0}),
+                                source=getattr(
+                                    err,
+                                    "source",
+                                    {"filename": "<plugin>", "lineno": 0},
+                                ),
                                 message=getattr(err, "message", str(err)),
                                 entry=getattr(err, "entry", None),
                             )
@@ -238,7 +244,7 @@ def load_string(
     Returns:
         Tuple of (entries, errors, options)
     """
-    engine = RustledgerEngine.get_instance()
+    engine = get_engine()
     result = engine.load(value, filename)
 
     entries = list(directives_from_json(result.get("entries", [])))
@@ -282,7 +288,7 @@ def load_uncached(
     del is_encrypted  # Rustledger handles GPG decryption automatically
 
     main_path = Path(beancount_file_path)
-    engine = RustledgerEngine.get_instance()
+    engine = get_engine()
 
     # auto_accounts is a synth plugin the engine runs from the ledger's own
     # ``plugin "..."`` declaration during loading; it must NOT be passed via the
@@ -296,7 +302,9 @@ def load_uncached(
     # Compute display_precision if not provided by FFI (workaround)
     options_json = result.get("options", {})
     if not options_json.get("display_precision"):
-        options_json["display_precision"] = _compute_display_precision(entries_json)
+        options_json["display_precision"] = _compute_display_precision(
+            entries_json
+        )
 
     entries = _sort_entries(list(directives_from_json(entries_json)))
     errors = list(_errors_from_json(result.get("errors", []), str(main_path)))

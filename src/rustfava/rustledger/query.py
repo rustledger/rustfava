@@ -7,7 +7,8 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from rustfava.beans.str import to_string
-from rustfava.rustledger.engine import RustledgerEngine
+from rustfava.rustledger.backend import get_engine
+from rustfava.rustledger.types import directives_to_json
 from rustfava.rustledger.types import RLAmount
 
 if TYPE_CHECKING:
@@ -64,7 +65,10 @@ class RLCursor:
     def fetchall(self) -> list[tuple[Any, ...]]:
         """Fetch all remaining rows."""
         rows = [
-            tuple(_convert_row_value(v, self._columns[i]) for i, v in enumerate(row))
+            tuple(
+                _convert_row_value(v, self._columns[i])
+                for i, v in enumerate(row)
+            )
             for row in self._rows[self._index :]
         ]
         self._index = len(self._rows)
@@ -84,7 +88,8 @@ class RLCursor:
         """Iterate over rows."""
         for row in self._rows[self._index :]:
             yield tuple(
-                _convert_row_value(v, self._columns[i]) for i, v in enumerate(row)
+                _convert_row_value(v, self._columns[i])
+                for i, v in enumerate(row)
             )
 
 
@@ -198,7 +203,7 @@ class RLConnection:
         """Initialize connection."""
         self._entries = entries
         self._options = options
-        self._engine = RustledgerEngine.get_instance()
+        self._engine = get_engine()
         self._source: str | None = None
 
     def set_source(self, source: str) -> None:
@@ -223,11 +228,18 @@ class RLConnection:
             CompilationError: If the query cannot be compiled
             RuntimeError: If source is not set
         """
-        if self._source is None:
-            # Fall back to re-serializing entries (slower but works)
-            self._source = _entries_to_source(self._entries)
-
-        result = self._engine.query(self._source, query_string)
+        if hasattr(self._engine, "query_entries"):
+            # Component engine: query the directive set directly via the typed
+            # `query-entries`, so there is no re-render of entries to beancount
+            # source (which can produce text the parser rejects).
+            result = self._engine.query_entries(
+                directives_to_json(list(self._entries)), query_string
+            )
+        else:
+            if self._source is None:
+                # JSON-RPC engine queries source text; re-serialize the entries.
+                self._source = _entries_to_source(self._entries)
+            result = self._engine.query(self._source, query_string)
 
         errors = result.get("errors", [])
         if errors:
@@ -253,10 +265,9 @@ def _entries_to_source(entries: Sequence[Directive]) -> str:
     """
     parts: list[str] = []
     for entry in entries:
-        if (
-            type(entry).__name__ == "RLCustom"
-            and getattr(entry, "type", "").startswith("fava")
-        ):
+        if type(entry).__name__ == "RLCustom" and getattr(
+            entry, "type", ""
+        ).startswith("fava"):
             continue
         rendered = to_string(entry)
         if rendered:
