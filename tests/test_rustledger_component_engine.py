@@ -265,6 +265,64 @@ def test_clamp_entries_matches_jsonrpc_engine() -> None:
     assert _norm(co_clamped) == _norm(jr_clamped)
 
 
+def test_load_full_returns_host_paths(
+    engine: RustledgerComponentEngine,
+    tmp_path: Path,
+) -> None:
+    """``load_full`` must map WASI guest paths back to real host paths.
+
+    The component sees files under the ``/work`` pre-open mount; Fava opens the
+    returned ``meta.filename`` to edit entries, so a ``/work/...`` path would
+    not exist on disk (regression: file edits hit FileNotFoundError)."""
+    main = tmp_path / "main.bean"
+    main.write_text("2024-01-01 open Assets:Cash USD\n")
+    result = engine.load_full(str(main))
+
+    filenames = {e["meta"]["filename"] for e in result["entries"]}
+    assert filenames == {str(main)}
+    assert not any(f.startswith("/work") for f in filenames)
+
+
+def test_custom_typed_values_use_jsonrpc_shape(
+    engine: RustledgerComponentEngine,
+) -> None:
+    """``custom`` directive args marshal to the JSON-RPC ``{type, value}``
+    shape (amount un-nested), which Fava's ``RLCustomValue`` reads. The generic
+    record marshalling would emit ``{value_type, value: {type: ...}}``."""
+    src = (
+        "2024-01-01 open Expenses:Groceries USD\n"
+        '2024-01-01 custom "budget" Expenses:Groceries "weekly" 100.00 USD\n'
+    )
+    custom = next(
+        e for e in engine.load(src)["entries"] if e["type"] == "custom"
+    )
+    assert custom["values"] == [
+        {"type": "account", "value": "Expenses:Groceries"},
+        {"type": "string", "value": "weekly"},
+        {"type": "amount", "value": {"number": "100.00", "currency": "USD"}},
+    ]
+
+
+def test_clamp_preserves_custom_typed_values(
+    engine: RustledgerComponentEngine,
+) -> None:
+    """A ``custom`` directive round-trips through ``clamp_entries`` (the
+    ``typed-value`` unmarshal path) with its typed args intact."""
+    src = (
+        "2024-01-01 open Expenses:Groceries USD\n"
+        '2024-06-01 custom "budget" Expenses:Groceries "weekly" 50.00 USD\n'
+    )
+    entries = engine.load(src)["entries"]
+    clamped = engine.clamp_entries(entries, "2024-01-01", "2024-12-31")[
+        "entries"
+    ]
+    custom = next(e for e in clamped if e["type"] == "custom")
+    assert {
+        "type": "amount",
+        "value": {"number": "50.00", "currency": "USD"},
+    } in (custom["values"])
+
+
 def test_missing_wasm_download_fallback_errors(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
