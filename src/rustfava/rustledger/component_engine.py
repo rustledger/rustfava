@@ -21,7 +21,9 @@ mirroring the JSON-RPC surface's tagged unions.
 from __future__ import annotations
 
 import os
+import sys
 import threading
+import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +44,7 @@ from wasmtime.component import Variant
 from wasmtime.component import VariantType
 
 from rustfava.rustledger.engine import _check_api_version
+from rustfava.rustledger.engine import RUSTLEDGER_VERSION
 from rustfava.rustledger.engine import RustledgerError
 
 # The four exported WIT interfaces (package ``rustledger:ledger@2.1.0``).
@@ -51,12 +54,47 @@ _UTIL = "rustledger:ledger/util@2.1.0"
 _FORMAT = "rustledger:ledger/format@2.1.0"
 
 
+_COMPONENT_WASM_URL = (
+    "https://github.com/rustledger/rustledger/releases/download/"
+    f"{RUSTLEDGER_VERSION}/rustledger-ffi-component-{RUSTLEDGER_VERSION}.wasm"
+)
+
+
 def _default_wasm_path() -> Path:
-    """Locate the bundled component wasm (overridable for local builds)."""
+    """Return the component wasm location (env override, else the cache path).
+
+    Does not download — that happens lazily in ``RustledgerComponentEngine``
+    so existence checks (e.g. test gating) stay side-effect free.
+    """
     override = os.environ.get("RUSTLEDGER_COMPONENT_WASM")
     if override:
         return Path(override)
     return Path(__file__).parent / "rustledger_ffi_component.wasm"
+
+
+def _download_component_wasm(wasm_path: Path) -> None:
+    """Download the released component wasm to ``wasm_path``, best-effort.
+
+    The artifact (``rustledger-ffi-component-<version>.wasm``) is attached to
+    the rustledger GitHub release matching :data:`RUSTLEDGER_VERSION`. Releases
+    that predate the component artifact return 404; on any failure this logs
+    and leaves no file behind, so the caller surfaces a clear build-from-source
+    error instead of a cryptic one.
+    """
+    print(  # noqa: T201
+        f"Downloading rustledger component wasm ({RUSTLEDGER_VERSION})...",
+        file=sys.stderr,
+    )
+    try:
+        wasm_path.parent.mkdir(parents=True, exist_ok=True)
+        urllib.request.urlretrieve(_COMPONENT_WASM_URL, wasm_path)  # noqa: S310
+        print("Done.", file=sys.stderr)  # noqa: T201
+    except Exception as e:  # noqa: BLE001
+        wasm_path.unlink(missing_ok=True)
+        print(  # noqa: T201
+            f"Could not download component wasm: {e}",
+            file=sys.stderr,
+        )
 
 
 def _snake(name: str) -> str:
@@ -169,11 +207,20 @@ class RustledgerComponentEngine:
 
     def __init__(self, wasm_path: Path | None = None) -> None:
         self._wasm_path = wasm_path or _default_wasm_path()
+        # Auto-download only the default cache location — never an explicit
+        # path or an `RUSTLEDGER_COMPONENT_WASM` override (caller-managed).
+        uses_default = wasm_path is None and not os.environ.get(
+            "RUSTLEDGER_COMPONENT_WASM",
+        )
+        if uses_default and not self._wasm_path.exists():
+            _download_component_wasm(self._wasm_path)
         if not self._wasm_path.exists():
             msg = (
-                f"rustledger component not found at {self._wasm_path}. Build "
-                "it with: cargo build -p rustledger-ffi-component "
-                "--target wasm32-wasip2 --release"
+                f"rustledger component wasm not found at {self._wasm_path} "
+                "and could not be downloaded (the pinned release may predate "
+                "the component artifact). Build it with: cargo build -p "
+                "rustledger-ffi-component --target wasm32-wasip2 --release, "
+                "or set RUSTLEDGER_COMPONENT_WASM to a local build."
             )
             raise RustledgerError(msg)
         self._engine = Engine()
