@@ -7,7 +7,6 @@ can be constructed from rustledger's JSON output.
 from __future__ import annotations
 
 import datetime
-from dataclasses import asdict
 from dataclasses import dataclass
 from dataclasses import fields
 from decimal import Decimal
@@ -279,7 +278,7 @@ class RLTransaction(AsDictMixin):
             date=txn_date,
             flag=data.get("flag", "*"),
             payee=data.get("payee"),
-            narration=data.get("narration", ""),
+            narration=data.get("narration") or "",
             tags=frozenset(data.get("tags", [])),
             links=frozenset(data.get("links", [])),
             postings=tuple(
@@ -681,7 +680,7 @@ def directive_from_json(data: dict[str, Any]) -> abc.Directive:
         msg = f"Unknown directive type: {directive_type}"
         raise ValueError(msg)
     # All types in DIRECTIVE_TYPES have from_json class method
-    from_json = getattr(cls, "from_json")
+    from_json = getattr(cls, "from_json")  # noqa: B009  # keep getattr: base abc.Directive lacks the attr (mypy)
     result: abc.Directive = from_json(data)
     return result
 

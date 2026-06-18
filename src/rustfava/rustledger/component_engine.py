@@ -616,14 +616,14 @@ class RustledgerComponentEngine:
         """Return the component's ``api_version`` string (e.g. ``"2.1"``)."""
         return self._call(_LEDGER, "version", [])
 
-    def load(self, source: str, filename: str = "<stdin>") -> dict[str, Any]:  # noqa: ARG002
+    def load(self, source: str, filename: str = "<stdin>") -> dict[str, Any]:
         """Parse + book ``source``; returns entries/errors/options/....
 
-        ``filename`` is accepted for API parity with the JSON-RPC engine; the
-        WIT ``load(source)`` has no filename param, so it is unused here.
+        ``filename`` is recorded as the directives' source location (the WIT
+        ``load`` takes it, matching the JSON-RPC engine).
         """
         self._ensure_version()
-        return self._call(_LEDGER, "load", [source])
+        return self._call(_LEDGER, "load", [source, filename])
 
     def query(self, source: str, query_string: str) -> dict[str, Any]:
         """Run a BQL query over ``source``; returns columns/rows/errors."""
