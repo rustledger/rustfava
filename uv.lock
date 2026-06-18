@@ -1406,6 +1406,7 @@ dependencies = [
     { name = "markdown2" },
     { name = "ply" },
     { name = "pydantic" },
+    { name = "wasmtime" },
     { name = "watchfiles" },
     { name = "werkzeug" },
 ]
@@ -1413,9 +1414,6 @@ dependencies = [
 [package.optional-dependencies]
 beancount-compat = [
     { name = "beancount" },
-]
-component = [
-    { name = "wasmtime" },
 ]
 excel = [
     { name = "pyexcel" },
@@ -1481,11 +1479,11 @@ requires-dist = [
     { name = "pyexcel", marker = "extra == 'excel'", specifier = ">=0.5" },
     { name = "pyexcel-ods3", marker = "extra == 'excel'", specifier = ">=0.5" },
     { name = "pyexcel-xlsx", marker = "extra == 'excel'", specifier = ">=0.5" },
-    { name = "wasmtime", marker = "extra == 'component'", specifier = ">=45,<46" },
+    { name = "wasmtime", specifier = ">=45,<46" },
     { name = "watchfiles", specifier = ">=0.20.0" },
     { name = "werkzeug", specifier = ">=2.2,<4" },
 ]
-provides-extras = ["excel", "beancount-compat", "component"]
+provides-extras = ["excel", "beancount-compat"]
 
 [package.metadata.requires-dev]
 dev = [
