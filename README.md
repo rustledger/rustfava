@@ -40,7 +40,14 @@ Download the latest release for your platform from the [Releases page](https://g
 | **Windows** | `.exe` installer or `.msi` |
 | **Linux** | `.AppImage`, `.deb`, `.rpm`, or `.tar.gz` |
 
-> **Note for Linux deb/rpm users**: The server component requires [wasmtime](https://wasmtime.dev/). Install it with:
+> **Backends**: rustfava runs the rustledger engine as an in-process WebAssembly
+> component, so the `wasmtime` Python package ships as a dependency and the
+> default backend works out of the box — no separate install needed.
+>
+> To opt back into the legacy JSON-RPC engine
+> (`RUSTFAVA_RUSTLEDGER_BACKEND=jsonrpc`), you must install the
+> [wasmtime](https://wasmtime.dev/) **CLI** separately (it is *not* a Python
+> dependency); the component backend does not need it:
 > ```bash
 > curl https://wasmtime.dev/install.sh -sSf | bash
 > ```
@@ -50,7 +57,7 @@ Download the latest release for your platform from the [Releases page](https://g
 | Method | Command |
 |--------|---------|
 | **Docker** | `docker run -p 5000:5000 -v /path/to/ledger:/data ghcr.io/rustledger/rustfava /data/main.beancount` |
-| **PyPI** | `uv tool install rustfava` (requires Python 3.13+ and [wasmtime](https://wasmtime.dev/)) |
+| **PyPI** | `uv tool install rustfava` (requires Python 3.13+; the `wasmtime` runtime is installed automatically) |
 | **Nix** | `nix run github:rustledger/rustfava#desktop` |
 
 <sub>Missing your platform? [Open an issue](https://github.com/rustledger/rustfava/issues/new) to request it.</sub>
