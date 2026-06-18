@@ -202,8 +202,9 @@ def snapshot(
         out = re.sub(r'id="ledger-mtime">\d+', 'id="ledger-mtime">MTIME', out)
         # replace env-dependant info
         out = re.sub(r'have_excel":\s*(false|False)', 'have_excel": true', out)
-        # replace object addresses
-        out = re.sub(r' object at 0x[0-9a-f]+>', ' object at ADDR>', out)
+        # replace object addresses (hex is uppercase on Windows, lowercase on
+        # POSIX — match both so snapshots are platform-independent)
+        out = re.sub(r' object at 0x[0-9a-fA-F]+>', ' object at ADDR>', out)
         # normalize non-deterministic set/dict repr in beancount_options
         out = re.sub(
             r'"commodities":"[^"]+"',
