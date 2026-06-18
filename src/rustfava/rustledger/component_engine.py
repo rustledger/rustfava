@@ -120,6 +120,16 @@ def _pair_value_type(vtype: Any) -> Any:
     return vtype.element.elements[1]
 
 
+_META_VALUE_CASES = frozenset({"text", "number", "boolean", "amount", "null"})
+
+
+def _is_meta_value(vtype: Any) -> bool:
+    """Whether ``vtype`` is the WIT ``meta-value`` variant."""
+    return isinstance(vtype, VariantType) and (
+        frozenset(name for name, _ in vtype.cases) == _META_VALUE_CASES
+    )
+
+
 def _unwrap_query_value(cell: Any) -> Any:  # noqa: PLR0911
     """Project a marshalled query cell to the JSON-RPC ``value_to_json`` shape.
 
@@ -336,6 +346,11 @@ def _marshal(value: Any, vtype: Any) -> Any:  # noqa: PLR0911, PLR0912
             isinstance(p, list) and len(p) == 2 and isinstance(p[0], str)
             for p in items
         ):
+            # ``list<meta-entry>`` (e.g. posting metadata): unwrap the tagged
+            # meta-value to a scalar, matching how ``meta.user`` is flattened,
+            # so downstream reads a bare string/number not ``{"type": ...}``.
+            if _is_meta_value(_pair_value_type(vtype)):
+                return {p[0]: _unwrap_meta_value(p[1]) for p in items}
             return {p[0]: p[1] for p in items}
         return items
     if isinstance(vtype, OptionType):
@@ -478,6 +493,13 @@ def _unmarshal(value: Any, vtype: Any) -> Any:  # noqa: PLR0911, PLR0912
     if isinstance(vtype, ListType):
         if _is_pair_list(vtype) and isinstance(value, dict):
             vt = _pair_value_type(vtype)
+            # ``list<meta-entry>`` values arrive unwrapped (see `_marshal`);
+            # re-tag as meta-value variants, mirroring the ``meta.user`` path.
+            if _is_meta_value(vt):
+                return [
+                    (k, _unmarshal(_meta_value_json(v), vt))
+                    for k, v in value.items()
+                ]
             return [(k, _unmarshal(v, vt)) for k, v in value.items()]
         return [_unmarshal(item, vtype.element) for item in value]
     if isinstance(vtype, OptionType):
