@@ -29,10 +29,11 @@ jobs:
           # Use Python 3.13 for macOS as beancount lacks 3.14 wheels
           - os: "macos-latest"
             py: "3.13"
-          # Windows tests disabled: wasmtime WASI has issues with Windows paths
-          # See: https://github.com/bytecodealliance/wasmtime/issues/XXX
-          # - os: "windows-latest"
-          #   py: "3.13"
+          # The component engine runs correctly on Windows; the only snag was
+          # uppercase hex in object-address snapshot normalization (fixed in
+          # conftest). beancount lacks 3.14 wheels, so pin 3.13.
+          - os: "windows-latest"
+            py: "3.13"
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
