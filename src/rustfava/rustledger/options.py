@@ -134,7 +134,9 @@ def options_from_json(data: dict[str, Any]) -> BeancountOptions:
     }
 
     options: BeancountOptions = {
-        "title": data.get("title", ""),
+        # `option<string>` on the component: present-but-None, so default on
+        # falsy (a None title is not a valid str — typeguard catches it).
+        "title": data.get("title") or "",
         "filename": data.get("filename", ""),
         # Root account names
         "name_assets": data.get("name_assets", "Assets"),

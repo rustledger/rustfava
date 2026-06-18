@@ -1,9 +1,8 @@
 """Select the rustledger engine backend.
 
-The legacy JSON-RPC engine is still the **default**; set
-``RUSTFAVA_RUSTLEDGER_BACKEND=component`` to opt into the in-process component
-engine (WASI Preview 2 / Component Model, rustledger #1384) during the
-dual-ship window. Flipping the default is tracked in #173.
+The in-process component engine (WASI Preview 2 / Component Model, rustledger
+#1384) is the **default**; set ``RUSTFAVA_RUSTLEDGER_BACKEND=jsonrpc`` to opt
+back into the legacy JSON-RPC engine. The flip is tracked in #173.
 
 This lives in its own module — not the package ``__init__`` — so call sites can
 import :func:`get_engine` at module level without a circular import through the
@@ -17,17 +16,19 @@ from typing import Any
 
 from rustfava.rustledger.engine import RustledgerEngine
 
+# Values of ``RUSTFAVA_RUSTLEDGER_BACKEND`` that select the legacy engine.
+_JSONRPC_ALIASES = frozenset({"jsonrpc", "json-rpc", "json"})
+
 
 def get_engine() -> Any:
     """Return the engine selected by ``RUSTFAVA_RUSTLEDGER_BACKEND``.
 
-    ``component`` selects the in-process component engine (needs the optional
-    ``wasmtime`` dependency); anything else keeps the JSON-RPC engine, which
-    stays the default during the dual-ship window. If ``wasmtime`` is missing
-    the component engine can't be imported, so fall back to JSON-RPC.
+    The component engine is the default; ``jsonrpc`` (or ``json-rpc``/``json``)
+    selects the legacy JSON-RPC engine. If ``wasmtime`` can't be imported the
+    component engine is unavailable, so fall back to JSON-RPC rather than crash.
     """
     backend = os.environ.get("RUSTFAVA_RUSTLEDGER_BACKEND", "").lower()
-    if backend != "component":
+    if backend in _JSONRPC_ALIASES:
         return RustledgerEngine.get_instance()
     try:
         from rustfava.rustledger.component_engine import (  # noqa: PLC0415

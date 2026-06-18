@@ -6,9 +6,9 @@ spawns the ``wasmtime`` CLI with JSON-RPC over stdin/stdout). This driver loads
 ``wasmtime-py``'s component API and calls its **typed** exports directly — no
 subprocess per call, no hand-mirrored JSON DTOs.
 
-It is wired in behind a flag (see ``rustfava.rustledger.get_engine``); the
-JSON-RPC engine stays the default until the component ships as a release
-artifact (``publish = false`` upstream — rustledger ADR-0006 Phase 3).
+This is the **default** engine (see ``rustfava.rustledger.get_engine``);
+``RUSTFAVA_RUSTLEDGER_BACKEND=jsonrpc`` opts back into the legacy JSON-RPC
+engine.
 
 Results are marshalled from the component's typed `Record`/`Variant`/`list`
 values into plain Python by a generic, *type-driven* converter

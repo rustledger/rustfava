@@ -42,6 +42,11 @@ dependencies = [
     "ply>=3.11",
     "pydantic>=2.0",
     "watchfiles>=0.20.0",
+    # Drives the rustledger WASI Preview 2 / Component-Model component
+    # (rustledger #1384), the default engine. Core dep, not an extra, since the
+    # component backend is the default (RUSTFAVA_RUSTLEDGER_BACKEND=jsonrpc opts
+    # back to the legacy JSON-RPC engine).
+    "wasmtime>=45,<46",
 ]
 
 [project.urls]
@@ -63,12 +68,6 @@ excel =[
 # Beancount compatibility - for legacy beancount plugin support and ingest hooks
 beancount-compat = [
     "beancount>=2,<4",
-]
-# Experimental in-process engine driving the rustledger WASI Preview 2 /
-# Component-Model component (rustledger #1384), selected via
-# RUSTFAVA_RUSTLEDGER_BACKEND=component. Default remains the JSON-RPC engine.
-component = [
-    "wasmtime>=45,<46",
 ]
 
 [dependency-groups]
