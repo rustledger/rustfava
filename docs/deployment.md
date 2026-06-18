@@ -2,6 +2,27 @@
 
 There are several ways to deploy rustfava depending on your needs.
 
+## Backends
+
+rustfava runs the rustledger engine in one of two ways, selected by the
+`RUSTFAVA_RUSTLEDGER_BACKEND` environment variable:
+
+- **`component`** (default) — runs the rustledger WebAssembly component
+  in-process via the `wasmtime` Python package, which is installed
+  automatically as a dependency. Nothing extra to set up.
+- **`jsonrpc`** (`json-rpc`/`json`) — the legacy engine, which shells out to the
+  `wasmtime` **CLI** over JSON-RPC. The CLI is **not** a Python dependency, so
+  you must install it separately for this backend:
+
+  ```bash
+  curl https://wasmtime.dev/install.sh -sSf | bash
+  ```
+
+If `RUSTFAVA_RUSTLEDGER_BACKEND` is unset (or set to anything other than a
+JSON-RPC alias) the component backend is used. As a safety net, if the
+`wasmtime` package can't be imported, rustfava falls back to the JSON-RPC engine
+— which then requires the CLI above.
+
 ## Desktop App
 
 For personal use, the [desktop app](https://github.com/rustledger/rustfava/releases) is the simplest option. It runs entirely locally with no server setup required.
