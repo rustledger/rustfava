@@ -35,7 +35,6 @@ dependencies = [
     "Flask>=2.2,<4",
     "Jinja2>=3,<4",
     "Werkzeug>=2.2,<4",
-    "beangulp>=0.1",
     "cheroot>=8,<12",
     "click>=7,<9",
     "markdown2>=2.3.0,<3",
@@ -64,6 +63,12 @@ excel =[
     "pyexcel>=0.5",
     "pyexcel-ods3>=0.5",
     "pyexcel-xlsx>=0.5",
+]
+# File import / ingest (beangulp importers). Optional because beangulp pulls in
+# beancount transitively (#146) — a plain `rustfava` install no longer drags in
+# beancount just to view ledgers. Install `rustfava[ingest]` to import files.
+ingest = [
+    "beangulp>=0.1",
 ]
 # Beancount compatibility - for legacy beancount plugin support and ingest hooks
 beancount-compat = [
@@ -97,6 +102,7 @@ scripts = [
 # Dependencies for tests.
 test = [
     "rustfava[excel]",
+    "rustfava[ingest]",
     "rustfava[beancount-compat]",
     "pytest-cov>=6",
     "pytest-xdist>=3",
