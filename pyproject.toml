@@ -89,6 +89,11 @@ types = [
     "typeguard>=4",
     "types-requests>=2.32.0.20250515",
     "types-setuptools>=67",
+    # beangulp + beancount are now optional (#146), but the type-checked code
+    # imports them — install both so mypy can resolve the stubs (previously
+    # beancount came in transitively via the beangulp core dep).
+    "rustfava[ingest]",
+    "rustfava[beancount-compat]",
 ]
 # Running pre-commit hooks.
 pre-commit = [

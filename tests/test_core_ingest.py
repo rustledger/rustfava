@@ -260,3 +260,20 @@ def test_filepath_in_primary_imports_folder(
     monkeypatch.setattr(example_ledger.fava_options, "import_dirs", [])
     with pytest.raises(RustfavaAPIError):
         filepath_in_primary_imports_folder("filename", example_ledger)
+
+
+def test_ingest_unavailable_without_beangulp(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without beangulp (the `ingest` extra), the import entry points raise a
+    clear ``IngestUnavailableError`` instead of crashing (#146)."""
+    from rustfava.core import ingest
+
+    monkeypatch.setattr(ingest, "_HAVE_BEANGULP", False)
+    monkeypatch.setattr(ingest, "cache", None)
+
+    with pytest.raises(ingest.IngestUnavailableError, match="rustfava\\[ingest\\]"):
+        ingest.load_import_config(Path("/does/not/matter.py"))
+
+    with pytest.raises(ingest.IngestUnavailableError, match="rustfava\\[ingest\\]"):
+        ingest.get_cached_file(Path("/does/not/matter"))

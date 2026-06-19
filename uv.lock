@@ -1460,6 +1460,7 @@ test = [
 types = [
     { name = "mypy" },
     { name = "pytest" },
+    { name = "rustfava", extra = ["beancount-compat", "ingest"] },
     { name = "typeguard" },
     { name = "types-requests" },
     { name = "types-setuptools" },
@@ -1526,6 +1527,8 @@ test = [
 types = [
     { name = "mypy", specifier = ">=1.14" },
     { name = "pytest", specifier = ">=8.4" },
+    { name = "rustfava", extras = ["beancount-compat"] },
+    { name = "rustfava", extras = ["ingest"] },
     { name = "typeguard", specifier = ">=4" },
     { name = "types-requests", specifier = ">=2.32.0.20250515" },
     { name = "types-setuptools", specifier = ">=67" },

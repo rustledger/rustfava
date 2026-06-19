@@ -43,7 +43,7 @@ try:  # pragma: no cover
 except ImportError:
     try:
         from beangulp import cache
-    except ImportError:  # neither beancount nor beangulp installed
+    except ImportError:  # pragma: no cover - neither beancount nor beangulp
         cache = None
 
     DEFAULT_HOOKS = []
@@ -174,7 +174,7 @@ def get_cached_file(path: Path) -> FileMemo:
     This checks the file's mtime before getting it from the Cache.
     In addition to using the beangulp cache.
     """
-    if cache is None:  # pragma: no cover - requires the `ingest` extra absent
+    if cache is None:
         raise IngestUnavailableError
     mtime = path.stat().st_mtime_ns
     filename = str(path)
@@ -362,7 +362,7 @@ def load_import_config(
     Raises:
         IngestUnavailableError: If beangulp (the ``ingest`` extra) is missing.
     """
-    if not _HAVE_BEANGULP:  # pragma: no cover - requires the extra absent
+    if not _HAVE_BEANGULP:
         raise IngestUnavailableError
     try:
         mod = run_path(str(module_path))
