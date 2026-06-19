@@ -108,7 +108,12 @@ class RustledgerEngine:
         # Find wasmtime binary
         self._wasmtime = shutil.which("wasmtime")
         if self._wasmtime is None:
-            msg = "wasmtime not found in PATH. Install with: cargo install wasmtime-cli"
+            msg = (
+                "wasmtime CLI not found in PATH. The legacy JSON-RPC backend "
+                "needs the `wasmtime` binary (cargo install wasmtime-cli). "
+                "The default in-process component backend needs no external "
+                "binary — unset RUSTFAVA_RUSTLEDGER_BACKEND to use it."
+            )
             raise RuntimeError(msg)
 
     @staticmethod
@@ -197,7 +202,13 @@ class RustledgerEngine:
         # JSON-RPC always returns valid JSON on stdout (even for errors)
         if not result.stdout.strip():
             error_msg = result.stderr.strip() or f"Exit code {result.returncode}"
-            raise RustledgerError(f"Empty response: {error_msg}")
+            raise RustledgerError(
+                f"The rustledger WASI subprocess produced no output ({error_msg}). "
+                "This legacy JSON-RPC backend launches a `wasmtime` binary, which "
+                "macOS Gatekeeper can block. The default in-process component "
+                "backend needs no subprocess — upgrade rustfava, or unset "
+                "RUSTFAVA_RUSTLEDGER_BACKEND, to use it. (rustfava #136/#120)",
+            )
 
         try:
             response = json.loads(result.stdout)
