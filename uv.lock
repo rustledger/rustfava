@@ -1397,7 +1397,6 @@ name = "rustfava"
 source = { editable = "." }
 dependencies = [
     { name = "babel" },
-    { name = "beangulp" },
     { name = "cheroot" },
     { name = "click" },
     { name = "flask" },
@@ -1420,6 +1419,9 @@ excel = [
     { name = "pyexcel-ods3" },
     { name = "pyexcel-xlsx" },
 ]
+ingest = [
+    { name = "beangulp" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -1429,7 +1431,7 @@ dev = [
     { name = "pytest-cov" },
     { name = "pytest-xdist" },
     { name = "ruff" },
-    { name = "rustfava", extra = ["beancount-compat", "excel"] },
+    { name = "rustfava", extra = ["beancount-compat", "excel", "ingest"] },
     { name = "setuptools" },
     { name = "typeguard" },
     { name = "types-requests" },
@@ -1451,13 +1453,14 @@ test = [
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "pytest-xdist" },
-    { name = "rustfava", extra = ["beancount-compat", "excel"] },
+    { name = "rustfava", extra = ["beancount-compat", "excel", "ingest"] },
     { name = "setuptools" },
     { name = "typeguard" },
 ]
 types = [
     { name = "mypy" },
     { name = "pytest" },
+    { name = "rustfava", extra = ["beancount-compat", "ingest"] },
     { name = "typeguard" },
     { name = "types-requests" },
     { name = "types-setuptools" },
@@ -1467,7 +1470,7 @@ types = [
 requires-dist = [
     { name = "babel", specifier = ">=2.11,<3" },
     { name = "beancount", marker = "extra == 'beancount-compat'", specifier = ">=2,<4" },
-    { name = "beangulp", specifier = ">=0.1" },
+    { name = "beangulp", marker = "extra == 'ingest'", specifier = ">=0.1" },
     { name = "cheroot", specifier = ">=8,<12" },
     { name = "click", specifier = ">=7,<9" },
     { name = "flask", specifier = ">=2.2,<4" },
@@ -1483,7 +1486,7 @@ requires-dist = [
     { name = "watchfiles", specifier = ">=0.20.0" },
     { name = "werkzeug", specifier = ">=2.2,<4" },
 ]
-provides-extras = ["excel", "beancount-compat"]
+provides-extras = ["excel", "ingest", "beancount-compat"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -1495,6 +1498,7 @@ dev = [
     { name = "ruff", specifier = ">=0.11" },
     { name = "rustfava", extras = ["beancount-compat"] },
     { name = "rustfava", extras = ["excel"] },
+    { name = "rustfava", extras = ["ingest"] },
     { name = "setuptools", specifier = ">=67" },
     { name = "typeguard", specifier = ">=4" },
     { name = "types-requests", specifier = ">=2.32.0.20250515" },
@@ -1516,12 +1520,15 @@ test = [
     { name = "pytest-xdist", specifier = ">=3" },
     { name = "rustfava", extras = ["beancount-compat"] },
     { name = "rustfava", extras = ["excel"] },
+    { name = "rustfava", extras = ["ingest"] },
     { name = "setuptools", specifier = ">=67" },
     { name = "typeguard", specifier = ">=4" },
 ]
 types = [
     { name = "mypy", specifier = ">=1.14" },
     { name = "pytest", specifier = ">=8.4" },
+    { name = "rustfava", extras = ["beancount-compat"] },
+    { name = "rustfava", extras = ["ingest"] },
     { name = "typeguard", specifier = ">=4" },
     { name = "types-requests", specifier = ">=2.32.0.20250515" },
     { name = "types-setuptools", specifier = ">=67" },

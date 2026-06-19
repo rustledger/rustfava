@@ -15,7 +15,25 @@ from pathlib import Path
 from runpy import run_path
 from typing import TYPE_CHECKING
 
-from beangulp import Importer
+try:
+    from beangulp import Importer
+
+    _HAVE_BEANGULP = True
+except (
+    ImportError
+):  # pragma: no cover - beangulp is the optional `ingest` extra
+    _HAVE_BEANGULP = False
+
+    class Importer:  # type: ignore[no-redef]
+        """Placeholder used when beangulp is not installed.
+
+        beangulp pulls in beancount transitively (#146), so it is an optional
+        extra (``pip install 'rustfava[ingest]'``). Nothing is an instance of
+        this placeholder, so beangulp-style importers are simply never matched;
+        rustfava's own ``BeanImporterProtocol`` importers are unaffected. The
+        import entry points raise a clear error when beangulp is missing.
+        """
+
 
 try:  # pragma: no cover
     from beancount.ingest import cache  # type: ignore[import-not-found]
@@ -23,7 +41,10 @@ try:  # pragma: no cover
 
     DEFAULT_HOOKS = [extract.find_duplicate_entries]
 except ImportError:
-    from beangulp import cache
+    try:
+        from beangulp import cache
+    except ImportError:  # pragma: no cover - neither beancount nor beangulp
+        cache = None
 
     DEFAULT_HOOKS = []
 
@@ -59,6 +80,16 @@ if TYPE_CHECKING:  # pragma: no cover
 
 class IngestError(BeancountError):
     """An error with one of the importers."""
+
+
+class IngestUnavailableError(RustfavaAPIError):
+    """File import was used but its optional dependency is not installed."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "File import requires beangulp, which is an optional dependency. "
+            "Install it with: pip install 'rustfava[ingest]'",
+        )
 
 
 class ImporterMethodCallError(RustfavaAPIError):
@@ -143,6 +174,8 @@ def get_cached_file(path: Path) -> FileMemo:
     This checks the file's mtime before getting it from the Cache.
     In addition to using the beangulp cache.
     """
+    if cache is None:
+        raise IngestUnavailableError
     mtime = path.stat().st_mtime_ns
     filename = str(path)
     cached = _CACHE.get(path)
@@ -325,7 +358,12 @@ def load_import_config(
 
     Returns:
         A pair of the importers (by name) and the list of hooks.
+
+    Raises:
+        IngestUnavailableError: If beangulp (the ``ingest`` extra) is missing.
     """
+    if not _HAVE_BEANGULP:
+        raise IngestUnavailableError
     try:
         mod = run_path(str(module_path))
     except Exception as error:  # pragma: no cover

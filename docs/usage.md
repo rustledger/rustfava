@@ -51,6 +51,14 @@ To export query results to Microsoft Excel or LibreOffice Calc:
 uv tool install rustfava[excel]
 ```
 
+To import transactions from files (the import/ingest UI, which uses
+[beangulp](https://github.com/beancount/beangulp) importers — this is the only
+feature that pulls in `beancount`):
+
+```bash
+uv tool install rustfava[ingest]
+```
+
 ### Option 3: Docker
 
 ```bash
