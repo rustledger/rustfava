@@ -30,7 +30,7 @@
     "@types/d3-time-format": "^4.0.3",
     "@types/dom-navigation": "^1.0.7",
     "@types/jsdom": "^28.0.3",
-    "@types/node": "^25.9.3",
+    "@types/node": "^26.0.0",
     "chokidar": "^5.0.0",
     "esbuild": "^0.28.1",
     "esbuild-svelte": "^0.9.5",
