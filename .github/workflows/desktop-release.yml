@@ -40,7 +40,10 @@ jobs:
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             sidecar_name: rustfava-server-x86_64-unknown-linux-gnu
-          - os: macos-latest
+          # PyInstaller cannot cross-compile: it emits a binary for the
+          # runner's own arch. macos-latest is now Apple Silicon, so the x64
+          # sidecar must build on a real Intel runner (issue #193).
+          - os: macos-13
             target: x86_64-apple-darwin
             sidecar_name: rustfava-server-x86_64-apple-darwin
           - os: macos-14
@@ -130,6 +133,22 @@ jobs:
         run: |
           move dist\rustfava.exe dist\${{ matrix.sidecar_name }}
 
+      - name: Verify sidecar architecture (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          BIN="dist/${{ matrix.sidecar_name }}"
+          file "$BIN"
+          case "${{ matrix.target }}" in
+            x86_64-*) EXPECT="x86_64" ;;
+            aarch64-*) EXPECT="arm64" ;;
+            *) echo "::error::Unknown macOS target ${{ matrix.target }}"; exit 1 ;;
+          esac
+          if ! file "$BIN" | grep -q "$EXPECT"; then
+            echo "::error::Sidecar arch mismatch: expected $EXPECT for ${{ matrix.target }}"
+            exit 1
+          fi
+
       - name: Upload sidecar artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -214,7 +233,9 @@ jobs:
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             sidecar_name: rustfava-server-x86_64-unknown-linux-gnu
-          - os: macos-latest
+          # Intel runner: builds x86_64 natively so the smoke test can launch
+          # the binary (an arm64 runner has no Rosetta by default), issue #193.
+          - os: macos-13
             target: x86_64-apple-darwin
             sidecar_name: rustfava-server-x86_64-apple-darwin
           - os: macos-14
@@ -312,6 +333,20 @@ jobs:
           echo "Testing app at: $APP_PATH"
           ls -la "$APP_PATH" || { echo "App bundle not found!"; exit 1; }
           file "$BINARY"
+
+          # Verify the bundled sidecar matches the target arch (issue #193)
+          SIDECAR="$APP_PATH/Contents/MacOS/rustfava-server"
+          if [ -f "$SIDECAR" ]; then
+            file "$SIDECAR"
+            case "${{ matrix.target }}" in
+              x86_64-*) EXPECT="x86_64" ;;
+              aarch64-*) EXPECT="arm64" ;;
+            esac
+            if ! file "$SIDECAR" | grep -q "$EXPECT"; then
+              echo "::error::Bundled sidecar arch mismatch: expected $EXPECT for ${{ matrix.target }}"
+              exit 1
+            fi
+          fi
 
           # Run binary directly to capture stdout/stderr and panic backtrace
           echo "=== Launching with RUST_BACKTRACE=full ==="
