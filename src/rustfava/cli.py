@@ -8,15 +8,9 @@ from pathlib import Path
 
 import click
 
-# Version for PyInstaller builds where importlib.metadata is unavailable
-__version__ = "0.1.11"
-
-try:
-    from importlib.metadata import version as get_version
-
-    __version__ = get_version("rustfava")
-except Exception:  # pragma: no cover
-    pass
+# Resilient version lookup (handles PyInstaller / .deb builds without
+# package metadata); see rustfava._resolve_version.
+from rustfava import __version__
 
 
 class AddressInUse(click.ClickException):  # noqa: D101
