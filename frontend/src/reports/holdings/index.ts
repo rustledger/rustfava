@@ -30,7 +30,7 @@ SELECT
   cost_date as acquisition_date
 WHERE account_sortkey(account) ~ "^[01]"
 GROUP BY account, cost_date, currency, cost_currency, cost_number, account_sortkey(account)
-ORDER BY account_sortkey(account), currency, cost_date
+ORDER BY account_sortkey(account), currency, acquisition_date
 `.trim(),
   by_account: `
 SELECT
