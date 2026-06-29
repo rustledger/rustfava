@@ -144,8 +144,10 @@ jobs:
             aarch64-*) EXPECT="arm64" ;;
             *) echo "::error::Unknown macOS target ${{ matrix.target }}"; exit 1 ;;
           esac
-          if ! file "$BIN" | grep -q "$EXPECT"; then
-            echo "::error::Sidecar arch mismatch: expected $EXPECT for ${{ matrix.target }}"
+          # Use `file -b` (no filename) so the sidecar_name — which itself
+          # contains "x86_64"/"aarch64" — can't false-match the grep.
+          if ! file -b "$BIN" | grep -qw "$EXPECT"; then
+            echo "::error::Sidecar arch mismatch: expected $EXPECT for ${{ matrix.target }}, got: $(file -b "$BIN")"
             exit 1
           fi
 
@@ -334,18 +336,24 @@ jobs:
           ls -la "$APP_PATH" || { echo "App bundle not found!"; exit 1; }
           file "$BINARY"
 
-          # Verify the bundled sidecar matches the target arch (issue #193)
+          # Verify the bundled sidecar matches the target arch (issue #193).
+          # Tauri strips the target triple, so the bundled name is plain
+          # `rustfava-server` (no arch substring to confuse the grep).
           SIDECAR="$APP_PATH/Contents/MacOS/rustfava-server"
           if [ -f "$SIDECAR" ]; then
             file "$SIDECAR"
             case "${{ matrix.target }}" in
               x86_64-*) EXPECT="x86_64" ;;
               aarch64-*) EXPECT="arm64" ;;
+              *) echo "::error::Unknown macOS target ${{ matrix.target }}"; exit 1 ;;
             esac
-            if ! file "$SIDECAR" | grep -q "$EXPECT"; then
-              echo "::error::Bundled sidecar arch mismatch: expected $EXPECT for ${{ matrix.target }}"
+            if ! file -b "$SIDECAR" | grep -qw "$EXPECT"; then
+              echo "::error::Bundled sidecar arch mismatch: expected $EXPECT for ${{ matrix.target }}, got: $(file -b "$SIDECAR")"
               exit 1
             fi
+          else
+            echo "::error::Bundled sidecar not found at $SIDECAR"
+            exit 1
           fi
 
           # Run binary directly to capture stdout/stderr and panic backtrace
