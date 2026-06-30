@@ -555,12 +555,16 @@ class RLCustomValue:
     def from_raw(cls, raw_value: Any) -> RLCustomValue:
         """Create from raw value, parsing different value types.
 
-        Rustledger outputs custom directive values as typed objects:
+        Rustledger outputs custom directive values as typed objects. The
+        ``type`` tag is the value's beancount datatype (rustledger v0.17 split
+        bare integers out as ``int``, distinct from non-integer ``number``):
         - {"type": "string", "value": "text"} -> string
-        - {"type": "number", "value": "10"} -> Decimal('10')
+        - {"type": "int", "value": "10"} -> Decimal('10')
+        - {"type": "number", "value": "10.5"} -> Decimal('10.5')
         - {"type": "bool", "value": true} -> bool
         - {"type": "amount", "value": {"number": "20.00", "currency": "EUR"}} -> RLAmount
         - {"type": "account", "value": "Expenses:Books"} -> string (account)
+        - {"type": "currency", "value": "USD"} -> string (currency)
         - {"type": "date", "value": "2024-01-01"} -> datetime.date
 
         For backwards compatibility, also handles raw strings.
@@ -572,7 +576,9 @@ class RLCustomValue:
 
             if val_type == "string":
                 return cls(val, dtype=str)
-            if val_type == "number":
+            # ``int`` and ``number`` are both numeric; beancount models custom
+            # numbers as Decimal (see test_fava_options bare-`10` handling).
+            if val_type in {"int", "number"}:
                 return cls(Decimal(str(val)), dtype=Decimal)
             if val_type == "bool":
                 return cls(val, dtype=bool)
@@ -585,7 +591,7 @@ class RLCustomValue:
                 if len(parts) == 2:
                     return cls(RLAmount(number=Decimal(parts[0]), currency=parts[1]))
                 return cls(val)
-            if val_type == "account":
+            if val_type in {"account", "currency"}:
                 return cls(val, dtype=str)
             if val_type == "date":
                 if val is None:

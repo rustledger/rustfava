@@ -51,11 +51,15 @@ from rustfava.rustledger.engine import _check_api_version
 from rustfava.rustledger.engine import RUSTLEDGER_VERSION
 from rustfava.rustledger.engine import RustledgerError
 
-# The four exported WIT interfaces (package ``rustledger:ledger@2.1.0``).
-_LEDGER = "rustledger:ledger/ledger@2.1.0"
-_BUILDER = "rustledger:ledger/builder@2.1.0"
-_UTIL = "rustledger:ledger/util@2.1.0"
-_FORMAT = "rustledger:ledger/format@2.1.0"
+# The exported WIT interfaces of package ``rustledger:ledger``. The interface
+# IDs embed the full WIT package version (independent of the rustledger release
+# version), so a WIT bump means updating ``_WIT_VERSION`` here — a mismatch
+# makes ``get_export_index`` return ``None`` and every call fail.
+_WIT_VERSION = "3.0.0"
+_LEDGER = f"rustledger:ledger/ledger@{_WIT_VERSION}"
+_BUILDER = f"rustledger:ledger/builder@{_WIT_VERSION}"
+_UTIL = f"rustledger:ledger/util@{_WIT_VERSION}"
+_FORMAT = f"rustledger:ledger/format@{_WIT_VERSION}"
 
 
 _COMPONENT_WASM_URL = (
