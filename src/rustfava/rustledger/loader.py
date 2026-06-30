@@ -112,7 +112,8 @@ def _errors_from_json(
         # feature, so it reports declared Python plugins as an error. rustfava
         # runs those plugins itself (see ``_run_plugins``), so this particular
         # diagnostic is expected and must not surface to the user.
-        if "requires the python-plugins feature" in str(err.get("message", "")):
+        message = str(err.get("message", ""))
+        if "requires the python-plugins feature" in message:
             continue
         # Handle both old format (source dict) and new format (line field)
         if "source" in err:
