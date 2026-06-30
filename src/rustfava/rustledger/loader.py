@@ -108,6 +108,12 @@ def _errors_from_json(
 
     result = []
     for err in errors_json:
+        # The wasm component is built without the engine's ``python-plugins``
+        # feature, so it reports declared Python plugins as an error. rustfava
+        # runs those plugins itself (see ``_run_plugins``), so this particular
+        # diagnostic is expected and must not surface to the user.
+        if "requires the python-plugins feature" in str(err.get("message", "")):
+            continue
         # Handle both old format (source dict) and new format (line field)
         if "source" in err:
             source = err["source"]
