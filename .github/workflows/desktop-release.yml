@@ -66,13 +66,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
-      - name: Download rustledger WASM from release
+      - name: Download rustledger component WASM from release
         shell: bash
+        # The in-process WASI Preview 2 component is the engine; the frozen app
+        # bundles it (see contrib/pyinstaller_spec.spec) so it need not download
+        # at first run. The legacy rustledger-ffi-wasi-*.wasm is no longer
+        # shipped upstream (rustledger #1419).
         run: |
           gh release download ${{ steps.rustledger-tag.outputs.tag }} \
             --repo ${{ env.RUSTLEDGER_REPO }} \
-            --pattern "rustledger-ffi-wasi-*.wasm" \
-            --output src/rustfava/rustledger/rustledger-wasi.wasm
+            --pattern "rustledger-ffi-component-*.wasm" \
+            --output src/rustfava/rustledger/rustledger_ffi_component.wasm
         env:
           GH_TOKEN: ${{ github.token }}
 

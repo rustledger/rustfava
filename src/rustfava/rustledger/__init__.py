@@ -7,7 +7,6 @@ replacing beancount for parsing, validation, and querying.
 from __future__ import annotations
 
 from rustfava.rustledger.backend import get_engine
-from rustfava.rustledger.engine import RustledgerEngine
 from rustfava.rustledger.loader import load_string
 from rustfava.rustledger.loader import load_uncached
 
@@ -25,7 +24,6 @@ def is_encrypted_file(path: str) -> bool:
 
 
 __all__ = [
-    "RustledgerEngine",
     "get_engine",
     "is_encrypted_file",
     "load_string",

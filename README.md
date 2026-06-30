@@ -40,17 +40,9 @@ Download the latest release for your platform from the [Releases page](https://g
 | **Windows** | `.exe` installer or `.msi` |
 | **Linux** | `.AppImage`, `.deb`, `.rpm`, or `.tar.gz` |
 
-> **Backends**: rustfava runs the rustledger engine as an in-process WebAssembly
-> component, so the `wasmtime` Python package ships as a dependency and the
-> default backend works out of the box — no separate install needed.
->
-> To opt back into the legacy JSON-RPC engine
-> (`RUSTFAVA_RUSTLEDGER_BACKEND=jsonrpc`), you must install the
-> [wasmtime](https://wasmtime.dev/) **CLI** separately (it is *not* a Python
-> dependency); the component backend does not need it:
-> ```bash
-> curl https://wasmtime.dev/install.sh -sSf | bash
-> ```
+> **Engine**: rustfava runs the rustledger engine as an in-process WebAssembly
+> component, so the `wasmtime` Python package ships as a dependency and works
+> out of the box — no separate install needed.
 
 ### Other Installation Methods
 

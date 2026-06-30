@@ -246,7 +246,9 @@ def load_string(
         Tuple of (entries, errors, options)
     """
     engine = get_engine()
-    result = engine.load(value, filename)
+    # expand_pads materializes `pad` directives into Padding transactions so
+    # the journal/balance views match `rledger` (rustfava #192).
+    result = engine.load(value, filename, expand_pads=True)
 
     entries = list(directives_from_json(result.get("entries", [])))
     errors = list(_errors_from_json(result.get("errors", []), filename))
@@ -296,7 +298,9 @@ def load_uncached(
     # ``plugins`` argument, which routes to the regular (post-booking) plugin
     # runner and reports a spurious "Unknown plugin: auto_accounts" error.
     # Entry sorting is handled below by ``_sort_entries``.
-    result = engine.load_full(str(main_path))
+    # expand_pads materializes `pad` directives into Padding transactions so
+    # the journal/balance views match `rledger` (rustfava #192).
+    result = engine.load_full(str(main_path), expand_pads=True)
 
     entries_json = result.get("entries", [])
 

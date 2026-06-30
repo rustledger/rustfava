@@ -48,8 +48,10 @@ if translations_dir.exists():
         rel_path = f.relative_to(rustfava_dir)
         datas.append((str(f), f"rustfava/{rel_path.parent}"))
 
-# WASM file for rustledger
-wasm_file = rustfava_dir / "rustledger" / "rustledger-wasi.wasm"
+# Rustledger engine: the in-process WASI Preview 2 component. Bundled when
+# present so the frozen app does not have to download it at first run (the
+# component_engine cache path is read-only inside the PyInstaller bundle).
+wasm_file = rustfava_dir / "rustledger" / "rustledger_ffi_component.wasm"
 if wasm_file.exists():
     datas.append((str(wasm_file), "rustfava/rustledger"))
 

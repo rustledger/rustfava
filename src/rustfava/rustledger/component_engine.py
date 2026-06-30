@@ -616,14 +616,23 @@ class RustledgerComponentEngine:
         """Return the component's ``api_version`` string (e.g. ``"2.1"``)."""
         return self._call(_LEDGER, "version", [])
 
-    def load(self, source: str, filename: str = "<stdin>") -> dict[str, Any]:
+    def load(
+        self,
+        source: str,
+        filename: str = "<stdin>",
+        *,
+        expand_pads: bool = False,
+    ) -> dict[str, Any]:
         """Parse + book ``source``; returns entries/errors/options/....
 
-        ``filename`` is recorded as the directives' source location (the WIT
-        ``load`` takes it, matching the JSON-RPC engine).
+        ``filename`` is the directives' source location. When ``expand_pads``
+        is true the engine materializes ``pad`` directives into synthesized
+        ``Padding`` transactions (sorted by date, no source location) so
+        balance-computing consumers see padded balances; the default keeps the
+        source-faithful stream (rustledger #1628 / rustfava #192).
         """
         self._ensure_version()
-        return self._call(_LEDGER, "load", [source, filename])
+        return self._call(_LEDGER, "load", [source, filename, expand_pads])
 
     def query(self, source: str, query_string: str) -> dict[str, Any]:
         """Run a BQL query over ``source``; returns columns/rows/errors."""
@@ -656,8 +665,14 @@ class RustledgerComponentEngine:
         *,
         allow_unrestricted_includes: bool = False,
         plugins: list[str] | None = None,
+        expand_pads: bool = False,
     ) -> dict[str, Any]:
         """Load a file (resolving includes/plugins) via the component.
+
+        When ``expand_pads`` is true the engine materializes ``pad`` directives
+        into synthesized ``Padding`` transactions so balance-computing
+        consumers see padded balances; the default keeps the source-faithful
+        stream (rustledger #1628 / rustfava #192).
 
         Unlike the source-based calls this needs filesystem access, so it runs
         on a fresh instance with the file's directory pre-opened into the WASI
@@ -681,7 +696,12 @@ class RustledgerComponentEngine:
             inst,
             _LEDGER,
             "load-file",
-            [guest_path, allow_unrestricted_includes, plugins or []],
+            [
+                guest_path,
+                allow_unrestricted_includes,
+                plugins or [],
+                expand_pads,
+            ],
         )
         # The component sees files under the WASI pre-open mount (``/work``),
         # so the directives it returns carry guest paths in ``meta.filename``
