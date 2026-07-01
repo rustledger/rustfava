@@ -14,6 +14,7 @@ bug is in loading/booking, not in the report layer.
 
 from __future__ import annotations
 
+import datetime
 from collections import defaultdict
 from decimal import Decimal
 from pathlib import Path
@@ -26,6 +27,9 @@ import pytest
 beancount_loader = pytest.importorskip("beancount.loader")
 
 from rustfava.rustledger import loader as rf_loader  # noqa: E402
+from rustfava.rustledger.backend import get_engine  # noqa: E402
+from rustfava.rustledger.types import directives_from_json  # noqa: E402
+from rustfava.rustledger.types import directives_to_json  # noqa: E402
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -106,18 +110,18 @@ def test_booked_inventories_match_beancount(ledger: str) -> None:
         )
 
 
-@pytest.mark.xfail(
-    reason="rustledger#1663: the load() path does not surface balance "
-    "assertion failures (only validate() does), so a failing `balance` is "
-    "silent. Remove this xfail once the engine emits balance errors on load "
-    "(or the loader calls validate and merges them).",
-    strict=False,
-)
-def test_failing_balance_assertion_is_surfaced() -> None:
-    """A failing `balance` directive must produce an error.
+def _balance_dirs(entries: Iterable[object]) -> list[object]:
+    return [e for e in entries if type(e).__name__ in {"Balance", "RLBalance"}]
 
-    beancount reports ``Balance failed for ...``; rustfava's display load path
-    currently returns no error, so the journal shows the assertion as passed.
+
+def test_failing_balance_assertion_is_surfaced() -> None:
+    """A failing `balance` must produce an error AND a non-zero diff.
+
+    Regression for rustledger#1663 / the C1 gap: `load()` (the display path)
+    previously reported no error for a failing assertion, so the journal showed
+    it as passed. rustledger 3.1.0 (v0.18.0) reports balance failures on load
+    and carries `diff` on the directive; the journal's red/green keys off a
+    present ``diff_amount``.
     """
     src = (
         "2024-01-01 open Assets:Cash USD\n"
@@ -127,7 +131,79 @@ def test_failing_balance_assertion_is_surfaced() -> None:
         "  Assets:Cash\n"
         "2024-01-03 balance Assets:Cash   999 USD\n"
     )
-    _entries, errors, _ = rf_loader.load_string(src, "<differential>")
+    entries, errors, _ = rf_loader.load_string(src, "<differential>")
     assert any(
         "balance" in str(getattr(e, "message", e)).lower() for e in errors
     ), "a failing balance assertion produced no error"
+    (bal,) = _balance_dirs(entries)
+    # Real balance is -5, asserted 999 -> non-zero diff -> renders as failed.
+    assert bal.diff_amount is not None
+    assert bal.diff_amount.number != 0
+
+
+def test_passing_balance_assertion_is_green() -> None:
+    """A passing `balance` must be silent: no error, and no diff_amount.
+
+    Guards the zero-diff mapping — the engine sends `diff = 0` on a passing
+    assertion, and carrying that through would mark every passing balance
+    ``diff_amount`` (i.e. failed) in the journal.
+    """
+    src = (
+        "2024-01-01 open Assets:Cash USD\n"
+        "2024-01-01 open Expenses:X USD\n"
+        '2024-01-02 * "t"\n'
+        "  Expenses:X   5 USD\n"
+        "  Assets:Cash\n"
+        "2024-01-03 balance Assets:Cash   -5 USD\n"
+    )
+    entries, errors, _ = rf_loader.load_string(src, "<differential>")
+    assert errors == []
+    (bal,) = _balance_dirs(entries)
+    assert bal.diff_amount is None
+
+
+def test_clamped_totals_match_beancount_balance_at_cutoff() -> None:
+    """The time-filter (engine clamp) opening balances must reconstruct the
+    correct closing totals — the path that rustledger#1656 broke.
+
+    Clamping to ``[begin, end)`` yields synthesized opening balances plus
+    in-window postings; summed per account that equals the ledger's balance as
+    of ``end`` (every posting dated before ``end``). Cross-check that against
+    beancount, per account and per (currency, cost) lot. The synthesized
+    ``Equity:Opening-Balances`` contra is clamp-specific, so exclude it.
+    """
+    path = str(DATA / "long-example.beancount")
+    begin, end = "2014-01-01", "2015-01-01"
+    cutoff = datetime.date(2015, 1, 1)
+    opening = "Equity:Opening-Balances"
+
+    rf_entries, _, _ = rf_loader.load_uncached(path)
+    clamped = directives_from_json(
+        get_engine().clamp_entries(
+            directives_to_json(list(rf_entries)), begin, end
+        )["entries"]
+    )
+    rf_inv = {
+        a: v
+        for a, v in _account_inventories(clamped).items()
+        if a != opening
+    }
+
+    bc_entries, _, _ = beancount_loader.load_file(path)
+    before_cutoff = [
+        e
+        for e in bc_entries
+        if getattr(e, "date", cutoff) < cutoff
+    ]
+    bc_inv = {
+        a: v
+        for a, v in _account_inventories(before_cutoff).items()
+        if a != opening
+    }
+
+    assert set(rf_inv) == set(bc_inv)
+    for account in sorted(bc_inv):
+        assert rf_inv[account] == bc_inv[account], (
+            f"clamped total mismatch for {account}: "
+            f"rustfava={rf_inv[account]} beancount={bc_inv[account]}"
+        )
