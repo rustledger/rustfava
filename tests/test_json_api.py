@@ -852,18 +852,7 @@ def test_api_filter_error(
         ("journal", "/example/api/journal"),
         ("income_statement", "/long-example/api/income_statement?time=2014"),
         ("narrations", "/long-example/api/narrations"),
-        pytest.param(
-            "trial_balance",
-            "/long-example/api/trial_balance?time=2014",
-            marks=pytest.mark.xfail(
-                reason="rustledger#1656: clamp opening-balance contra for a "
-                "held-at-cost position drops the cost weight, so an at-cost "
-                "trial balance over a time filter does not sum to zero. Fix "
-                "lands engine-side in rustledger v0.17.2 — remove this xfail "
-                "(and refresh the snapshot) on that bump.",
-                strict=False,
-            ),
-        ),
+        ("trial_balance", "/long-example/api/trial_balance?time=2014"),
         ("balance_sheet", "/long-example/api/balance_sheet"),
         (
             "balance_sheet_with_cost",
