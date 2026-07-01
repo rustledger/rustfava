@@ -1,25 +1,16 @@
-"""Number-precision boundary characterization (Layer 2 of correctness plan).
+"""Number-precision at the JSON boundary (Layer 2 of the correctness plan).
 
-The JSON API serializes every ``Decimal`` via ``float()``
-(``core/charts.py:_json_default``), so exact ledger Decimals cross the wire as
-IEEE-754 float64. The frontend has no decimal type and renders numbers through
-``Intl.NumberFormat`` at display precision, so **typical currency values are
-unaffected in the rendered UI** — but the float rounding is visible to raw JSON
-API consumers, CSV/Excel export (``util/excel.py`` also does ``float()``), and
-column sorting, and it silently corrupts high-precision values.
+The JSON API now serialises every ``Decimal`` as an **exact number literal**
+(``core/charts.py`` uses ``simplejson`` with ``use_decimal``), so the wire
+carries full precision — a decimal-aware consumer (an exact API client, or a
+future frontend decimal type) recovers the exact ledger value, and
+custom/budget amounts no longer leak as ``float`` (R8).
 
-These tests pin the boundary so it can't regress and so a future fix is
-measurable:
-
-* ``test_typical_values_are_lossless`` — currency and reasonable crypto
-  magnitudes must survive the wire exactly (they do today: float64 holds ~15-16
-  significant digits). This guards the common case.
-* ``test_high_precision_is_lost`` — documents, as an ``xfail``, that values
-  beyond float64's precision are rounded on the wire. It flips to passing once
-  numbers are emitted exactly, which requires an exact JSON encoder (e.g.
-  ``simplejson`` with ``use_decimal``) **and** frontend decimal support — the
-  wire change alone also regenerates every snapshot, so it belongs with that
-  epic, not in isolation.
+A float-parsing consumer (plain ``JSON.parse`` in the browser, or stdlib
+``json.loads``) still narrows to float64 on read — that residual is the
+frontend-decimal step, tracked separately. The frontend renders through
+``Intl.NumberFormat`` at display precision, so typical values are unaffected in
+the UI regardless.
 """
 
 from __future__ import annotations
@@ -27,66 +18,60 @@ from __future__ import annotations
 from decimal import Decimal
 
 import pytest
+import simplejson
 
 from rustfava.core.charts import dumps
 from rustfava.core.charts import loads
 
 
-def _round_trip(value: Decimal) -> Decimal:
-    """Serialize a Decimal through the real API provider and read it back."""
-    wire = dumps({"n": value})
-    return Decimal(str(loads(wire)["n"]))
+def _wire_value(value: Decimal) -> Decimal:
+    """The exact Decimal an exact consumer recovers from the wire."""
+    parsed = simplejson.loads(dumps({"n": value}), use_decimal=True)
+    return Decimal(parsed["n"])
 
 
-# Values a real ledger produces: 2dp fiat, 8dp crypto, large-but-bounded share
-# counts, small residues. All within float64's ~15-16 significant digits.
-LOSSLESS = [
+# A spread of real-ledger and adversarial magnitudes: 2dp fiat, 8dp crypto,
+# division results (conversions / unrealized %), large magnitudes, and values
+# well beyond float64's ~16 significant digits.
+VALUES = [
     "0",
     "100.00",
     "-1234.56",
     "0.00801",
-    "1234567.89",
     "0.12345678",  # 8dp crypto
     "12345678.12345678",  # 16 significant digits
-    "-9876543.21",
-]
-
-
-@pytest.mark.parametrize("literal", LOSSLESS)
-def test_typical_values_are_lossless(literal: str) -> None:
-    """Currency and reasonable-precision values must cross the wire exactly."""
-    value = Decimal(literal)
-    assert _round_trip(value) == value
-
-
-# Values beyond float64 precision: a division result (conversions / unrealized
-# %), a large magnitude with decimals, and a high-precision large number.
-LOSSY = [
-    "88.571428571428571428571429",  # 26 significant digits (e.g. 620/7)
+    "88.571428571428571428571429",  # 26 sig digits (e.g. 620/7)
     "123456789012.123456",  # 18 significant digits
-    "9999999999999999.01",  # rounds catastrophically to 1e16
+    "9999999999999999.01",  # would round to 1e16 as a float
 ]
 
 
-@pytest.mark.parametrize("literal", LOSSY)
-@pytest.mark.xfail(
-    reason="Decimal->float64 at the JSON boundary (core/charts.py) rounds "
-    "beyond ~16 significant digits. Fixing end-to-end needs an exact JSON "
-    "encoder plus frontend decimal support (and regenerates all snapshots); "
-    "see the correctness plan. Flips green when numbers are emitted exactly.",
-    strict=True,
-)
-def test_high_precision_is_lost(literal: str) -> None:
-    """High-precision values are currently rounded on the wire (documented)."""
+@pytest.mark.parametrize("literal", VALUES)
+def test_values_cross_the_wire_exactly(literal: str) -> None:
+    """Every value survives the wire exactly, at any precision."""
     value = Decimal(literal)
-    assert _round_trip(value) == value
+    assert _wire_value(value) == value
+
+
+@pytest.mark.parametrize(
+    "literal", ["88.571428571428571428571429", "9999999999999999.01"]
+)
+def test_float_parsing_consumer_still_rounds(literal: str) -> None:
+    """A float-parsing read still narrows to float64 (the residual gap).
+
+    Documents that plain ``json.loads``/``JSON.parse`` rounds high-precision
+    values — the frontend-decimal step. Flips (this test's premise breaks) if a
+    decimal-aware parser is adopted on the read side.
+    """
+    value = Decimal(literal)
+    assert Decimal(str(loads(dumps({"n": value}))["n"])) != value
 
 
 def test_api_numbers_are_json_numbers_not_strings() -> None:
-    """Pin the current wire contract: report numbers serialize as JSON numbers.
+    """Report numbers must serialise as JSON numbers, not quoted strings.
 
-    A deliberate switch to exact string/tagged encoding must update this test,
-    so the wire-format change can't happen silently.
+    A switch to string/tagged encoding must update this test, so the
+    wire-format contract can't change silently.
     """
     wire = dumps({"n": Decimal("100.00")})
-    assert '"n":100' in wire  # a bare JSON number, not "100.00" quoted
+    assert '"n":100.00' in wire  # exact number literal, not "100.00" quoted

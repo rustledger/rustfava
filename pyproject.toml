@@ -40,6 +40,10 @@ dependencies = [
     "markdown2>=2.3.0,<3",
     "ply>=3.11",
     "pydantic>=2.0",
+    # Exact Decimal JSON: emit monetary values as exact number literals rather
+    # than lossy float64 (stdlib json cannot). Keeps the wire, exports, and API
+    # consumers precise; the frontend still JSON.parses them as numbers.
+    "simplejson>=3.19",
     "watchfiles>=0.20.0",
     # Drives the rustledger WASI Preview 2 / Component-Model component
     # (rustledger #1384), the default engine. Core dep, not an extra, since the
@@ -89,6 +93,7 @@ types = [
     "typeguard>=4",
     "types-requests>=2.32.0.20250515",
     "types-setuptools>=67",
+    "types-simplejson>=3.19",
     # beangulp + beancount are now optional (#146), but the type-checked code
     # imports them — install both so mypy can resolve the stubs (previously
     # beancount came in transitively via the beangulp core dep).

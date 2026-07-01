@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections import defaultdict
 from dataclasses import dataclass
 from dataclasses import fields
@@ -12,13 +13,10 @@ from re import Pattern
 from typing import Any
 from typing import TYPE_CHECKING
 
-import json
-
+import simplejson
 from flask.json.provider import JSONProvider
 
 from rustfava.beans.abc import Position
-from rustfava.rustledger.constants import Booking
-from rustfava.rustledger.constants import MISSING
 from rustfava.beans.abc import Transaction
 from rustfava.beans.account import account_tester
 from rustfava.beans.flags import FLAG_UNREALIZED
@@ -26,6 +24,8 @@ from rustfava.beans.helpers import slice_entry_dates
 from rustfava.core.conversion import conversion_from_str
 from rustfava.core.inventory import CounterInventory
 from rustfava.core.module_base import FavaModule
+from rustfava.rustledger.constants import Booking
+from rustfava.rustledger.constants import MISSING
 from rustfava.util import listify
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -43,9 +43,11 @@ ZERO = Decimal()
 
 
 def _json_default(o: Any) -> Any:
-    """Specific serialisation for some data types."""
-    if isinstance(o, Decimal):
-        return float(o)
+    """Specific serialisation for some data types.
+
+    ``Decimal`` is handled natively by ``simplejson`` (``use_decimal``), which
+    emits it as an exact number literal instead of a lossy ``float``.
+    """
     if isinstance(o, (date, Booking, Position)):
         return str(o)
     if isinstance(o, (set, frozenset)):
@@ -60,9 +62,13 @@ def _json_default(o: Any) -> Any:
 
 
 def dumps(obj: Any, **_kwargs: Any) -> str:
-    """Dump as a JSON string."""
-    return json.dumps(
-        obj, sort_keys=True, separators=(",", ":"), default=_json_default
+    """Dump as a JSON string, emitting Decimals as exact number literals."""
+    return simplejson.dumps(
+        obj,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=_json_default,
+        use_decimal=True,
     )
 
 
@@ -75,8 +81,12 @@ class RustfavaJSONProvider(JSONProvider):
     """Use custom JSON encoder and decoder."""
 
     def dumps(self, obj: Any, **_kwargs: Any) -> str:  # noqa: D102
-        return json.dumps(
-            obj, sort_keys=True, separators=(",", ":"), default=_json_default
+        return simplejson.dumps(
+            obj,
+            sort_keys=True,
+            separators=(",", ":"),
+            default=_json_default,
+            use_decimal=True,
         )
 
     def loads(self, s: str | bytes, **_kwargs: Any) -> Any:  # noqa: D102
