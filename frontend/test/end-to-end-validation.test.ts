@@ -67,5 +67,7 @@ test("validate journal", async () => {
   const res = array(entryValidator)(data);
   ok(res.is_ok);
   const entries = res.unwrap();
-  equal(entries.length, 23);
+  // 24 (was 23): the example ledger's `pad` now materializes a Padding
+  // transaction in the journal (rustfava #192, engine expand-pads).
+  equal(entries.length, 24);
 });
