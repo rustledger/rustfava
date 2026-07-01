@@ -18,6 +18,7 @@ import datetime
 from collections import defaultdict
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 from typing import TYPE_CHECKING
 
 import pytest
@@ -110,7 +111,7 @@ def test_booked_inventories_match_beancount(ledger: str) -> None:
         )
 
 
-def _balance_dirs(entries: Iterable[object]) -> list[object]:
+def _balance_dirs(entries: Iterable[object]) -> list[Any]:
     return [e for e in entries if type(e).__name__ in {"Balance", "RLBalance"}]
 
 
