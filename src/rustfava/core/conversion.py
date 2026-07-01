@@ -29,11 +29,16 @@ if TYPE_CHECKING:  # pragma: no cover
 
 
 def get_cost(pos: Position) -> Amount:
-    """Return the total cost of a Position."""
+    """Return the total cost of a Position.
+
+    A cost with no per-unit ``number`` (e.g. a bare ``{USD}`` cost the engine
+    accepts without inferring an amount) has no computable cost value, so fall
+    back to the units rather than crashing on ``None * Decimal``.
+    """
     cost_ = pos.cost
     return (
         _Amount(cost_.number * pos.units.number, cost_.currency)
-        if cost_ is not None
+        if cost_ is not None and cost_.number is not None
         else pos.units
     )
 
@@ -69,7 +74,11 @@ def get_market_value(
                 units_.number * price_number,
                 value_currency,
             )
-        return _Amount(units_.number * cost_.number, value_currency)
+        # No price: fall back to cost value, but only when the cost carries a
+        # per-unit number — a bare ``{CUR}`` cost has none, so return units
+        # rather than crashing on ``None * Decimal``.
+        if cost_.number is not None:
+            return _Amount(units_.number * cost_.number, value_currency)
     return units_
 
 
