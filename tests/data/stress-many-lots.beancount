@@ -1,0 +1,17 @@
+; Multiple held-at-cost lots of one commodity + a partial FIFO-style reduction
+2020-01-01 open Assets:Stock
+2020-01-01 open Assets:Cash
+2020-01-01 open Income:Gains
+
+2020-02-01 * "buy lot at 50"
+  Assets:Stock   10 HOOL {50 USD}
+  Assets:Cash  -500 USD
+
+2020-03-01 * "buy lot at 60"
+  Assets:Stock   10 HOOL {60 USD}
+  Assets:Cash  -600 USD
+
+2020-04-01 * "sell 5 from the 50 lot at 60, realizing a gain"
+  Assets:Stock   -5 HOOL {50 USD}
+  Assets:Cash   300 USD
+  Income:Gains

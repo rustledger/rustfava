@@ -40,7 +40,17 @@ DATA = Path(__file__).parent / "data"
 # Fixtures whose booking rustfava must reproduce exactly. These span
 # held-at-cost lots, prices, multiple currencies, a pad/balance pair (example)
 # and a date-boundary case (off-by-one); long-example alone has ~193 cost lots.
-LEDGERS = ["example", "long-example", "query-example", "off-by-one"]
+# The stress-* fixtures add constructs the others lack: `@@` total prices,
+# multiple lots of one commodity with a partial reduction, and pad->balance.
+LEDGERS = [
+    "example",
+    "long-example",
+    "query-example",
+    "off-by-one",
+    "stress-total-price",
+    "stress-many-lots",
+    "stress-pad-balance",
+]
 
 # Type of `cost` normalized to beancount's 4-tuple identity — deliberately
 # dropping rustfava's extra ``number_total`` field so two engines' economically
@@ -208,3 +218,57 @@ def test_clamped_totals_match_beancount_balance_at_cutoff() -> None:
             f"clamped total mismatch for {account}: "
             f"rustfava={rf_inv[account]} beancount={bc_inv[account]}"
         )
+
+
+def test_stress_fixtures_hand_verified() -> None:
+    """Explicit expected numbers for the stress fixtures.
+
+    The differential tests above already cross-check these against beancount;
+    this pins the values by hand as a second, oracle-independent check of the
+    constructs the fixtures were added for.
+    """
+    d = datetime.date
+
+    # @@ total price: A drains 7 USD, B gains 10 EUR; the sold posting's price
+    # is the per-unit 10/7, and no cost is created.
+    entries, errors, _ = rf_loader.load_uncached(
+        str(DATA / "stress-total-price.beancount")
+    )
+    assert not errors
+    inv = _account_inventories(entries)
+    assert inv["Assets:USD"] == {("USD", None): Decimal(-7)}
+    assert inv["Assets:EUR"] == {("EUR", None): Decimal(10)}
+    (usd_posting,) = [
+        p
+        for e in entries
+        for p in getattr(e, "postings", [])
+        if getattr(p, "account", "") == "Assets:USD"
+    ]
+    assert usd_posting.cost is None
+    assert usd_posting.price is not None
+    # per-unit = 10 EUR / 7 USD = 1.4286 (to 4dp); the engine keeps full
+    # precision, so compare at a sane scale rather than bit-for-bit.
+    assert round(usd_posting.price.number, 4) == Decimal("1.4286")
+
+    # Many lots: after selling 5 of the 50-lot, 5 HOOL @ {50} + 10 HOOL @ {60}.
+    entries, errors, _ = rf_loader.load_uncached(
+        str(DATA / "stress-many-lots.beancount")
+    )
+    assert not errors
+    stock = _account_inventories(entries)["Assets:Stock"]
+    assert stock == {
+        ("HOOL", (Decimal(50), "USD", d(2020, 2, 1), None)): Decimal(5),
+        ("HOOL", (Decimal(60), "USD", d(2020, 3, 1), None)): Decimal(10),
+    }
+
+    # pad -> balance: the pad fills Cash to the asserted 500, spend leaves 400,
+    # and both balance assertions pass (no errors, diff_amount None).
+    entries, errors, _ = rf_loader.load_uncached(
+        str(DATA / "stress-pad-balance.beancount")
+    )
+    assert not errors
+    assert _account_inventories(entries)["Assets:Cash"] == {
+        ("USD", None): Decimal(400)
+    }
+    for bal in _balance_dirs(entries):
+        assert bal.diff_amount is None
