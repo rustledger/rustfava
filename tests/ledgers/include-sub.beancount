@@ -1,0 +1,5 @@
+2020-01-01 open Assets:Sub USD
+2020-01-01 open Equity:Open
+2020-02-01 * "in sub"
+  Assets:Sub   50 USD
+  Equity:Open

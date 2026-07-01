@@ -1,0 +1,8 @@
+; @ per-unit price (not @@ total)
+2020-01-01 open Assets:USD USD
+2020-01-01 open Assets:EUR EUR
+2020-01-01 open Income:FX
+2020-02-01 * "convert at 0.9"
+  Assets:USD   -10 USD @ 0.9 EUR
+  Assets:EUR     9 EUR
+  Income:FX

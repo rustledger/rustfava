@@ -1,0 +1,5 @@
+include "include-sub.beancount"
+2020-01-01 open Assets:Main USD
+2020-02-02 * "in main"
+  Assets:Main   30 USD
+  Equity:Open

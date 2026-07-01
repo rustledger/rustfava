@@ -59,6 +59,13 @@ LEDGERS = [
     "stress-total-price",
     "stress-many-lots",
     "stress-pad-balance",
+    # Booking methods (partial reduction resolves per method), an `@` per-unit
+    # price, and a multi-file include chain — each must book like beancount.
+    "book-fifo",
+    "book-lifo",
+    "book-hifo",
+    "at-price",
+    "include-main",
 ]
 
 # Type of `cost` normalized to beancount's 4-tuple identity — deliberately
@@ -281,3 +288,94 @@ def test_stress_fixtures_hand_verified() -> None:
     }
     for bal in _balance_dirs(entries):
         assert bal.diff_amount is None
+
+
+def _account_aggregates(
+    entries: Iterable[object],
+) -> dict[str, dict[str, tuple[Decimal, Decimal]]]:
+    """Per account and units-currency: ``(total_units, total_at_cost)``.
+
+    Ignores lot identity (date/label) — for cases where rustfava's lot
+    *representation* legitimately differs from beancount (or beancount can't
+    book at all) but the economic aggregate must still be right. ``at_cost`` is
+    ``sum(units * cost.number)`` (in the cost currency), keyed by the units
+    currency of the position it belongs to.
+    """
+    zero = Decimal()
+    agg: dict[str, dict[str, list[Decimal]]] = defaultdict(
+        lambda: defaultdict(lambda: [zero, zero])
+    )
+    for entry in entries:
+        for posting in getattr(entry, "postings", []):
+            u = posting.units
+            if u is None or u.number is None:
+                continue
+            slot = agg[posting.account][u.currency]
+            slot[0] += Decimal(u.number)
+            c = posting.cost
+            if c is not None and getattr(c, "number", None) is not None:
+                slot[1] += Decimal(u.number) * Decimal(c.number)
+    out: dict[str, dict[str, tuple[Decimal, Decimal]]] = {}
+    for account, per_currency in agg.items():
+        kept = {
+            currency: (units, cost)
+            for currency, (units, cost) in per_currency.items()
+            if (units, cost) != (zero, zero)
+        }
+        if kept:
+            out[account] = kept
+    return out
+
+
+@pytest.mark.parametrize("ledger", ["error-ambiguous", "error-oversell"])
+def test_booking_errors_are_rejected_like_beancount(ledger: str) -> None:
+    """Ambiguous reductions and oversells must error in both engines."""
+    path = _ledger_path(ledger)
+    _, bc_errors, _ = beancount_loader.load_file(path)
+    _, rf_errors, _ = rf_loader.load_uncached(path)
+    assert bc_errors, "expected beancount to reject this ledger"
+    assert rf_errors, "rustfava accepted a ledger beancount rejects"
+
+
+def test_auto_accounts_plugin_matches_beancount() -> None:
+    """The auto_accounts plugin must synthesize the same Open directives."""
+    src = (
+        'plugin "beancount.plugins.auto_accounts"\n'
+        '2020-02-01 * "no explicit open"\n'
+        "  Assets:New   10 USD\n"
+        "  Equity:X\n"
+    )
+    bc_entries, _, _ = beancount_loader.load_string(src)
+    rf_entries, _, _ = rf_loader.load_string(src, "<plugin>")
+    opened = {"Open", "RLOpen"}
+
+    def opens(entries: Iterable[Any]) -> set[str]:
+        return {e.account for e in entries if type(e).__name__ in opened}
+
+    assert opens(rf_entries) == opens(bc_entries) == {"Assets:New", "Equity:X"}
+
+
+def test_labeled_lot_aggregate_matches_beancount() -> None:
+    """Reducing a labeled lot: aggregate agrees with beancount.
+
+    The engine currently drops the lot label on the reduction posting
+    (rustledger upstream), so the per-lot representation differs, but the
+    per-account units and at-cost totals must still match beancount.
+    """
+    path = _ledger_path("book-labeled")
+    bc_entries, _, _ = beancount_loader.load_file(path)
+    rf_entries, _, _ = rf_loader.load_uncached(path)
+    assert _account_aggregates(rf_entries) == _account_aggregates(bc_entries)
+
+
+def test_average_booking_aggregate_is_correct() -> None:
+    """AVERAGE booking (unsupported by beancount) must aggregate correctly.
+
+    Buy 10 X @10 and 10 X @20, sell 5 -> 15 X left at a 15 average = 225 USD.
+    """
+    rf_entries, errors, _ = rf_loader.load_uncached(
+        _ledger_path("book-average")
+    )
+    assert not errors
+    stock = _account_aggregates(rf_entries)["Assets:S"]["X"]
+    assert stock == (Decimal(15), Decimal(225))
