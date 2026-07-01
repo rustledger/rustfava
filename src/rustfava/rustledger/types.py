@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import datetime
 from dataclasses import dataclass
+from dataclasses import field
 from dataclasses import fields
 from decimal import Decimal
 from typing import Any
@@ -121,7 +122,14 @@ class RLCost:
     currency: str
     date: datetime.date | None
     label: str | None
-    number_total: Decimal | None = None
+    # ``number_total`` is derived (total = number x units) and is only used to
+    # render the ``per # total`` cost-spec syntax; beancount's booked ``Cost``
+    # has no such field. It must NOT take part in equality/hash, or two
+    # economically identical lots (one carrying a total, one not) would key to
+    # different inventory slots and never net — leaving ghost +N/-N lots that
+    # render identically (`cost_to_string` ignores number_total). See the
+    # correctness plan (C3).
+    number_total: Decimal | None = field(default=None, compare=False)
 
     @classmethod
     def from_json(
