@@ -305,6 +305,18 @@ class RLBalance(AsDictMixin):
     @classmethod
     def from_json(cls, data: dict[str, Any]) -> RLBalance:
         """Create from JSON dict."""
+        # rustledger 3.1.0 (#1663) reports `diff` (computed - asserted) on
+        # every *checked* assertion — zero when it passed, non-zero when it
+        # failed; absent when not checked (parse errors / unknown account).
+        # Downstream (journal red/green in core/accounts.py, the journal
+        # template) treats a present `diff_amount` as "assertion failed", so
+        # only carry a NON-ZERO diff — otherwise every passing balance would
+        # render as failed. Fall back to the legacy `diff_amount` key for the
+        # clamp/filter round-trip.
+        diff = RLAmount.from_json(data.get("diff") or data.get("diff_amount"))
+        diff_amount = (
+            diff if diff is not None and diff.number != 0 else None
+        )
         return cls(
             meta=_parse_meta(data),
             date=_parse_date(data["date"]),
@@ -313,7 +325,7 @@ class RLBalance(AsDictMixin):
             tolerance=(
                 Decimal(data["tolerance"]) if data.get("tolerance") else None
             ),
-            diff_amount=RLAmount.from_json(data.get("diff_amount")),
+            diff_amount=diff_amount,
         )
 
 
