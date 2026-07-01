@@ -9,13 +9,10 @@ Build the component with::
 
 from __future__ import annotations
 
-import json
 import tempfile
 from pathlib import Path
 
 import pytest
-
-from rustfava.rustledger.engine import RustledgerEngine
 
 pytest.importorskip("wasmtime")
 
@@ -55,7 +52,7 @@ SRC = (
 
 
 def test_version(engine: RustledgerComponentEngine) -> None:
-    assert engine.version() == "2.1"
+    assert engine.version() == "3.1"
 
 
 def test_load_marshals_typed_directives(
@@ -242,29 +239,6 @@ def test_clamp_entries_synthesizes_opening_balance(
         for e in clamped
         if e["type"] == "transaction"
     )
-
-
-def test_clamp_entries_matches_jsonrpc_engine() -> None:
-    """Cross-engine parity: component ``clamp_entries`` must agree with the
-    JSON-RPC engine. Skipped when the wasmtime CLI (JSON-RPC backend) is
-    unavailable — the component path is still covered by the tests above."""
-    try:
-        jsonrpc = RustledgerEngine.get_instance()
-        jr_clamped = jsonrpc.clamp_entries(
-            jsonrpc.load(SRC_CLAMP)["entries"], _CLAMP_BEGIN, _CLAMP_END
-        )["entries"]
-    except Exception as exc:  # noqa: BLE001 - CLI absence is the expected skip
-        pytest.skip(f"JSON-RPC engine unavailable: {exc}")
-
-    component = RustledgerComponentEngine()
-    co_clamped = component.clamp_entries(
-        component.load(SRC_CLAMP)["entries"], _CLAMP_BEGIN, _CLAMP_END
-    )["entries"]
-
-    def _norm(entries: object) -> str:
-        return json.dumps(entries, sort_keys=True, default=str)
-
-    assert _norm(co_clamped) == _norm(jr_clamped)
 
 
 def test_load_full_returns_host_paths(

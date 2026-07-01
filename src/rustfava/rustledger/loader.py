@@ -108,6 +108,13 @@ def _errors_from_json(
 
     result = []
     for err in errors_json:
+        # The wasm component is built without the engine's ``python-plugins``
+        # feature, so it reports declared Python plugins as an error. rustfava
+        # runs those plugins itself (see ``_run_plugins``), so this particular
+        # diagnostic is expected and must not surface to the user.
+        message = str(err.get("message", ""))
+        if "requires the python-plugins feature" in message:
+            continue
         # Handle both old format (source dict) and new format (line field)
         if "source" in err:
             source = err["source"]
@@ -246,7 +253,9 @@ def load_string(
         Tuple of (entries, errors, options)
     """
     engine = get_engine()
-    result = engine.load(value, filename)
+    # expand_pads materializes `pad` directives into Padding transactions so
+    # the journal/balance views match `rledger` (rustfava #192).
+    result = engine.load(value, filename, expand_pads=True)
 
     entries = list(directives_from_json(result.get("entries", [])))
     errors = list(_errors_from_json(result.get("errors", []), filename))
@@ -296,7 +305,9 @@ def load_uncached(
     # ``plugins`` argument, which routes to the regular (post-booking) plugin
     # runner and reports a spurious "Unknown plugin: auto_accounts" error.
     # Entry sorting is handled below by ``_sort_entries``.
-    result = engine.load_full(str(main_path))
+    # expand_pads materializes `pad` directives into Padding transactions so
+    # the journal/balance views match `rledger` (rustfava #192).
+    result = engine.load_full(str(main_path), expand_pads=True)
 
     entries_json = result.get("entries", [])
 

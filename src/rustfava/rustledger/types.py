@@ -305,6 +305,18 @@ class RLBalance(AsDictMixin):
     @classmethod
     def from_json(cls, data: dict[str, Any]) -> RLBalance:
         """Create from JSON dict."""
+        # rustledger 3.1.0 (#1663) reports `diff` (computed - asserted) on
+        # every *checked* assertion — zero when it passed, non-zero when it
+        # failed; absent when not checked (parse errors / unknown account).
+        # Downstream (journal red/green in core/accounts.py, the journal
+        # template) treats a present `diff_amount` as "assertion failed", so
+        # only carry a NON-ZERO diff — otherwise every passing balance would
+        # render as failed. Fall back to the legacy `diff_amount` key for the
+        # clamp/filter round-trip.
+        diff = RLAmount.from_json(data.get("diff") or data.get("diff_amount"))
+        diff_amount = (
+            diff if diff is not None and diff.number != 0 else None
+        )
         return cls(
             meta=_parse_meta(data),
             date=_parse_date(data["date"]),
@@ -313,7 +325,7 @@ class RLBalance(AsDictMixin):
             tolerance=(
                 Decimal(data["tolerance"]) if data.get("tolerance") else None
             ),
-            diff_amount=RLAmount.from_json(data.get("diff_amount")),
+            diff_amount=diff_amount,
         )
 
 
@@ -555,12 +567,16 @@ class RLCustomValue:
     def from_raw(cls, raw_value: Any) -> RLCustomValue:
         """Create from raw value, parsing different value types.
 
-        Rustledger outputs custom directive values as typed objects:
+        Rustledger outputs custom directive values as typed objects. The
+        ``type`` tag is the value's beancount datatype (rustledger v0.17 split
+        bare integers out as ``int``, distinct from non-integer ``number``):
         - {"type": "string", "value": "text"} -> string
-        - {"type": "number", "value": "10"} -> Decimal('10')
+        - {"type": "int", "value": "10"} -> Decimal('10')
+        - {"type": "number", "value": "10.5"} -> Decimal('10.5')
         - {"type": "bool", "value": true} -> bool
         - {"type": "amount", "value": {"number": "20.00", "currency": "EUR"}} -> RLAmount
         - {"type": "account", "value": "Expenses:Books"} -> string (account)
+        - {"type": "currency", "value": "USD"} -> string (currency)
         - {"type": "date", "value": "2024-01-01"} -> datetime.date
 
         For backwards compatibility, also handles raw strings.
@@ -572,7 +588,9 @@ class RLCustomValue:
 
             if val_type == "string":
                 return cls(val, dtype=str)
-            if val_type == "number":
+            # ``int`` and ``number`` are both numeric; beancount models custom
+            # numbers as Decimal (see test_fava_options bare-`10` handling).
+            if val_type in {"int", "number"}:
                 return cls(Decimal(str(val)), dtype=Decimal)
             if val_type == "bool":
                 return cls(val, dtype=bool)
@@ -585,7 +603,7 @@ class RLCustomValue:
                 if len(parts) == 2:
                     return cls(RLAmount(number=Decimal(parts[0]), currency=parts[1]))
                 return cls(val)
-            if val_type == "account":
+            if val_type in {"account", "currency"}:
                 return cls(val, dtype=str)
             if val_type == "date":
                 if val is None:
