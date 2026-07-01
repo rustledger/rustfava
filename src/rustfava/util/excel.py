@@ -96,7 +96,10 @@ def _row_to_pyexcel(row: ResultRow, header: list[Column]) -> list[str]:
             continue
         type_ = column.datatype
         if type_ is Decimal:
-            result.append(float(value))
+            # Keep the exact Decimal: CSV writes str(Decimal) losslessly, and
+            # pyexcel accepts it for xlsx/ods (those cells are float64 by the
+            # format anyway). float() here would corrupt CSV precision.
+            result.append(value)
         elif type_ is int:
             result.append(value)
         elif type_ in (set, frozenset) or isinstance(value, (set, frozenset)):
