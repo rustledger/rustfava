@@ -1,0 +1,9 @@
+; reducing more units than held -> must error
+2020-01-01 open Assets:S
+2020-01-01 open Assets:Cash
+2020-02-01 * "buy"
+  Assets:S   5 X {10 USD}
+  Assets:Cash
+2020-03-01 * "oversell"
+  Assets:S   -10 X {10 USD}
+  Assets:Cash   100 USD

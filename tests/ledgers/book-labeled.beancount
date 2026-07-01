@@ -1,0 +1,12 @@
+; reduce a specific labeled lot
+2020-01-01 open Assets:S
+2020-01-01 open Assets:Cash
+2020-02-01 * "lot a"
+  Assets:S   10 X {10 USD, "lot-a"}
+  Assets:Cash
+2020-03-01 * "lot b"
+  Assets:S   10 X {10 USD, "lot-b"}
+  Assets:Cash
+2020-04-01 * "sell from lot-b"
+  Assets:S   -5 X {10 USD, "lot-b"}
+  Assets:Cash   50 USD

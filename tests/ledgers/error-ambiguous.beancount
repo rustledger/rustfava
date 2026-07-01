@@ -1,0 +1,12 @@
+; two lots, reduction without disambiguation -> ambiguous, must error
+2020-01-01 open Assets:S
+2020-01-01 open Assets:Cash
+2020-02-01 * "b1"
+  Assets:S   10 X {10 USD}
+  Assets:Cash
+2020-03-01 * "b2"
+  Assets:S   10 X {20 USD}
+  Assets:Cash
+2020-04-01 * "ambiguous"
+  Assets:S   -5 X {}
+  Assets:Cash   50 USD
