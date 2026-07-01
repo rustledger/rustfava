@@ -36,6 +36,15 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
 DATA = Path(__file__).parent / "data"
+# Hand-authored differential fixtures live outside tests/data/ so they are not
+# picked up by the ingest directory walk (test_api_imports snapshots that dir).
+LEDGERS_DIR = Path(__file__).parent / "ledgers"
+
+
+def _ledger_path(name: str) -> str:
+    """Resolve a fixture to tests/ledgers/ if present, else tests/data/."""
+    stress = LEDGERS_DIR / f"{name}.beancount"
+    return str(stress if stress.exists() else DATA / f"{name}.beancount")
 
 # Fixtures whose booking rustfava must reproduce exactly. These span
 # held-at-cost lots, prices, multiple currencies, a pad/balance pair (example)
@@ -102,7 +111,7 @@ def _account_inventories(
 @pytest.mark.parametrize("ledger", LEDGERS)
 def test_booked_inventories_match_beancount(ledger: str) -> None:
     """Per-account booked inventories must equal beancount's, to the cent."""
-    path = str(DATA / f"{ledger}.beancount")
+    path = _ledger_path(ledger)
     bc_entries, _bc_errors, _ = beancount_loader.load_file(path)
     rf_entries, _rf_errors, _ = rf_loader.load_uncached(path)
 
@@ -232,7 +241,7 @@ def test_stress_fixtures_hand_verified() -> None:
     # @@ total price: A drains 7 USD, B gains 10 EUR; the sold posting's price
     # is the per-unit 10/7, and no cost is created.
     entries, errors, _ = rf_loader.load_uncached(
-        str(DATA / "stress-total-price.beancount")
+        str(LEDGERS_DIR / "stress-total-price.beancount")
     )
     assert not errors
     inv = _account_inventories(entries)
@@ -252,7 +261,7 @@ def test_stress_fixtures_hand_verified() -> None:
 
     # Many lots: after selling 5 of the 50-lot, 5 HOOL @ {50} + 10 HOOL @ {60}.
     entries, errors, _ = rf_loader.load_uncached(
-        str(DATA / "stress-many-lots.beancount")
+        str(LEDGERS_DIR / "stress-many-lots.beancount")
     )
     assert not errors
     stock = _account_inventories(entries)["Assets:Stock"]
@@ -264,7 +273,7 @@ def test_stress_fixtures_hand_verified() -> None:
     # pad -> balance: the pad fills Cash to the asserted 500, spend leaves 400,
     # and both balance assertions pass (no errors, diff_amount None).
     entries, errors, _ = rf_loader.load_uncached(
-        str(DATA / "stress-pad-balance.beancount")
+        str(LEDGERS_DIR / "stress-pad-balance.beancount")
     )
     assert not errors
     assert _account_inventories(entries)["Assets:Cash"] == {
