@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any
 from typing import TYPE_CHECKING
 
 import pytest
 
+from rustfava.rustledger.query import ColumnDescription
 from rustfava.rustledger.query import connect
 from rustfava.util import excel
 
@@ -40,6 +42,18 @@ def test_to_csv(example_ledger: RustfavaLedger) -> None:
     assert types
     assert rows
     assert excel.to_csv(types, rows)
+
+
+def test_to_csv_preserves_exact_decimal() -> None:
+    """CSV export must keep a Decimal exact — no lossy float() (R8-adjacent).
+
+    CSV is text, so it can carry full precision; the old float() rounded
+    high-precision values on the way out.
+    """
+    exact = Decimal("88.571428571428571428571428571")
+    types = [ColumnDescription("amount", Decimal)]
+    out = excel.to_csv(types, [(exact,)]).getvalue().decode("utf-8")
+    assert "88.571428571428571428571428571" in out
 
 
 @pytest.mark.skipif(not excel.HAVE_EXCEL, reason="pyexcel not installed")
