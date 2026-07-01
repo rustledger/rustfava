@@ -1,0 +1,12 @@
+; pad -> balance resolution, then a later passing balance
+2020-01-01 open Assets:Cash USD
+2020-01-01 open Equity:Opening-Balances
+
+2020-01-05 pad Assets:Cash Equity:Opening-Balances
+2020-01-10 balance Assets:Cash  500 USD
+
+2020-02-01 * "spend"
+  Assets:Cash  -100 USD
+  Equity:Opening-Balances
+
+2020-02-10 balance Assets:Cash  400 USD

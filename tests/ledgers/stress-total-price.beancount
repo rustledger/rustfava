@@ -1,0 +1,11 @@
+; @@ total-price postings (per-unit = total / units); absent from other fixtures
+option "operating_currency" "USD"
+
+2020-01-01 open Assets:USD    USD
+2020-01-01 open Assets:EUR    EUR
+2020-01-01 open Income:Trade
+
+2020-02-01 * "convert 7 USD at a total price of 10 EUR"
+  Assets:USD   -7 USD @@ 10 EUR
+  Assets:EUR   10 EUR
+  Income:Trade
