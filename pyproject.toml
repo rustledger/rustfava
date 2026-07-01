@@ -138,6 +138,9 @@ include-package-data = true
 where = ["src"]
 
 [tool.setuptools_scm]
+# Emit the resolved version into the package so builds without dist-info
+# metadata (PyInstaller sidecar, .deb) can still report it (issue #191).
+version_file = "src/rustfava/_version.py"
 
 [tool.black]
 line-length = 79

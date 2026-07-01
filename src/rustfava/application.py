@@ -428,9 +428,9 @@ def _setup_routes(fava_app: Flask) -> None:  # noqa: PLR0915
     @fava_app.route("/<bfile>/help/<page_slug>")
     def help_page(page_slug: str) -> str:
         """rustfava's included documentation."""
-        from importlib.metadata import version
-
         from markdown2 import markdown
+
+        from rustfava import __version__ as rustfava_version
 
         # Validate against whitelist (defense-in-depth: also check for path traversal)
         if page_slug not in HELP_PAGES or "/" in page_slug or "\\" in page_slug:
@@ -452,7 +452,7 @@ def _setup_routes(fava_app: Flask) -> None:  # noqa: PLR0915
             help_html=Markup(  # noqa: S704
                 render_template_string(
                     html,
-                    rustfava_version=version("rustfava"),
+                    rustfava_version=rustfava_version,
                 ),
             ),
             HELP_PAGES=HELP_PAGES,

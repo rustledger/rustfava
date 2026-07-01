@@ -78,6 +78,28 @@ try:
 except Exception:
     pass
 
+# Ensure rustfava can report its version from the frozen binary. The bundle
+# ships no dist-info metadata, so importlib.metadata.version() fails and
+# rustfava falls back to rustfava._version (see issue #191). Generate that
+# module here from RUSTFAVA_VERSION (set from the git tag on release builds)
+# or setuptools_scm when building from a full source checkout.
+version_file = rustfava_dir / "_version.py"
+if not version_file.exists():
+    version = os.environ.get("RUSTFAVA_VERSION")
+    if not version:
+        try:
+            from setuptools_scm import get_version
+
+            version = get_version(root=str(project_root))
+        except Exception:
+            version = None
+    if version:
+        version_file.write_text(
+            f'version = "{version}"\n__version__ = version\n'
+        )
+if version_file.exists():
+    hiddenimports.append("rustfava._version")
+
 a = Analysis(
     [str(rustfava_dir / "cli.py")],
     pathex=[str(src_dir)],
