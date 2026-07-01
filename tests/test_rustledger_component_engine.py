@@ -52,7 +52,7 @@ SRC = (
 
 
 def test_version(engine: RustledgerComponentEngine) -> None:
-    assert engine.version() == "3.0"
+    assert engine.version() == "3.1"
 
 
 def test_load_marshals_typed_directives(
