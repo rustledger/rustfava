@@ -17,6 +17,8 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from rustfava.core import RustfavaLedger
+from rustfava.core.inventory import SimpleCounterInventory
+from rustfava.core.query import QueryResultTable
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -61,12 +63,16 @@ def test_holdings_query_compiles_with_cost_dated_lots(tmp_path: Path) -> None:
         ledger.all_entries, _HOLDINGS_QUERY
     )
 
-    lots = [
-        row
-        for row in result.rows
-        if row[0] == "Assets:Brokerage" and row[1].get("VTI")
-    ]
-    units = sorted(lot[1]["VTI"] for lot in lots)
-    assert units == [Decimal(10), Decimal(20)], (
+    assert isinstance(result, QueryResultTable)
+    units: list[Decimal] = []
+    for row in result.rows:
+        inventory = row[1]
+        if row[0] == "Assets:Brokerage" and isinstance(
+            inventory, SimpleCounterInventory
+        ):
+            vti = inventory.get("VTI")
+            if vti is not None:
+                units.append(vti)
+    assert sorted(units) == [Decimal(10), Decimal(20)], (
         "expected the two VTI lots to survive the GROUP BY on cost_date"
     )
