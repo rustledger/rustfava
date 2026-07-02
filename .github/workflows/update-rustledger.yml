@@ -41,6 +41,81 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Using rustledger version: $VERSION"
 
+      - name: Download and verify the FFI component
+        id: component
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          ASSET="rustledger-ffi-component-${VERSION}.wasm"
+          BASE="https://github.com/rustledger/rustledger/releases/download/${VERSION}"
+
+          curl -fsSL -o component.wasm "${BASE}/${ASSET}"
+          curl -fsSL -o component.wasm.sha256 "${BASE}/${ASSET}.sha256"
+          echo "$(cut -d' ' -f1 component.wasm.sha256)  component.wasm" | sha256sum -c -
+
+          # Vendor the verified component (the previous bot only edited the
+          # version string and left the vendored artifact stale — see #219/#220).
+          cp component.wasm src/rustfava/rustledger/rustledger_ffi_component.wasm
+
+      - name: Install wasm-tools
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-tools
+
+      - name: Gate on the component's WIT version (#220)
+        id: gate
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+
+          # The WIT package version the new component actually implements.
+          NEW_WIT=$(wasm-tools component wit component.wasm \
+            | grep -m1 -oE 'rustledger:ledger/ledger@[0-9]+\.[0-9]+\.[0-9]+' \
+            | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          # The WIT version the host bindings were written against.
+          CUR_WIT=$(grep -oE '_WIT_VERSION = "[0-9.]+"' \
+            src/rustfava/rustledger/component_engine.py | grep -oE '[0-9.]+')
+          echo "component WIT: ${NEW_WIT}  host bindings WIT: ${CUR_WIT}"
+
+          # Conventional-commit breaking markers in the release notes
+          # ("feat(ffi)!:", "fix!:", or a BREAKING CHANGE footer).
+          BREAKING=$(gh release view "$VERSION" --repo rustledger/rustledger \
+            --json body -q .body \
+            | grep -cE '(^|\* )[a-z]+(\([^)]*\))?!:|BREAKING CHANGE' || true)
+
+          NEEDS_REVIEW=false
+          REASONS=""
+          # ANY WIT change needs a human: even a *minor* bump can add a
+          # mandatory import (3.1 -> 3.2 added `host.decrypt`, which made the
+          # component un-instantiable until the linker grew the binding — the
+          # #218 incident).
+          if [ "$NEW_WIT" != "$CUR_WIT" ]; then
+            NEEDS_REVIEW=true
+            REASONS="- WIT package version changed: \`${CUR_WIT}\` -> \`${NEW_WIT}\` (host bindings in \`component_engine.py\` likely need changes)"
+            # Pre-apply the mechanical part for the human.
+            sed -i "s/_WIT_VERSION = \"${CUR_WIT}\"/_WIT_VERSION = \"${NEW_WIT}\"/" \
+              src/rustfava/rustledger/component_engine.py
+          fi
+          if [ "${BREAKING:-0}" -gt 0 ]; then
+            NEEDS_REVIEW=true
+            REASONS="${REASONS}"$'\n'"- release notes contain a conventional-commit breaking marker (\`!:\` / BREAKING CHANGE)"
+          fi
+
+          {
+            echo "needs_review=${NEEDS_REVIEW}"
+            echo "new_wit=${NEW_WIT}"
+            echo "cur_wit=${CUR_WIT}"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "reasons<<EOF"
+            echo "${REASONS}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Update RUSTLEDGER_VERSION in engine.py
         run: |
           VERSION="${{ steps.version.outputs.version }}"
@@ -51,6 +126,38 @@ jobs:
 
           # Verify the change
           grep "RUSTLEDGER_VERSION" "$FILE"
+
+      - name: Compose PR body
+        id: body
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          if [ "${{ steps.gate.outputs.needs_review }}" = "true" ]; then
+            cat > pr-body.md <<EOF
+          Automated update of rustledger to ${VERSION} — **held for human review** (draft, no auto-merge) because:
+
+          ${{ steps.gate.outputs.reasons }}
+
+          ## What the bot already did
+          - Bumped \`RUSTLEDGER_VERSION\` and refreshed the vendored component (sha256-verified)
+          - Bumped \`_WIT_VERSION\` to \`${{ steps.gate.outputs.new_wit }}\` (if it changed)
+
+          ## What a human must check
+          - [ ] New/changed WIT **imports**: does the component need host bindings the linker doesn't define yet? (\`wasm-tools component wit\` the vendored file; see the \`host\` interface handling in \`component_engine.py\`)
+          - [ ] Run the rustledger test suites locally (\`just test-py\`)
+          - [ ] Update marshalling for any changed WIT types
+
+          See [rustledger ${VERSION} release notes](https://github.com/rustledger/rustledger/releases/tag/${VERSION}). Context: #218 / #219 / #220.
+          EOF
+          else
+            cat > pr-body.md <<EOF
+          Automated update of rustledger WASM version to ${VERSION}.
+
+          The component's WIT version is unchanged (\`${{ steps.gate.outputs.cur_wit }}\`) and the release notes carry no breaking markers, so this auto-merges once CI passes. The vendored component was refreshed and sha256-verified.
+
+          See [rustledger releases](https://github.com/rustledger/rustledger/releases) for the changelog.
+          EOF
+          fi
 
       - name: Close stale upgrade PRs
         env:
@@ -75,24 +182,20 @@ jobs:
           base: main
           commit-message: "chore: upgrade rustledger to ${{ steps.version.outputs.version }}"
           title: "chore: upgrade rustledger to ${{ steps.version.outputs.version }}"
-          body: |
-            Automated update of rustledger WASM version to ${{ steps.version.outputs.version }}.
-
-            This PR was triggered by a new rustledger release.
-
-            See [rustledger releases](https://github.com/rustledger/rustledger/releases) for changelog.
+          body-path: pr-body.md
           branch: chore/upgrade-rustledger-${{ steps.version.outputs.version }}
           delete-branch: true
+          draft: ${{ steps.gate.outputs.needs_review }}
 
       - name: Enable auto-merge
-        if: steps.cpr.outputs.pull-request-number
+        if: steps.cpr.outputs.pull-request-number && steps.gate.outputs.needs_review != 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           # Merge the bump automatically once required CI passes, so green
-          # bumps don't pile up unmerged. A bump that breaks against the new
-          # WASM (e.g. a wire-format change, as in the v0.16.0 bump) fails CI
-          # and stays open for a human.
+          # bumps don't pile up unmerged. Bumps whose component changed its WIT
+          # version (or whose release notes carry breaking markers) never reach
+          # this step — they stay a draft for a human (#220).
           #
           # SAFETY: this only gates on CI if the repo has "Allow auto-merge"
           # enabled AND the relevant checks marked as required branch
