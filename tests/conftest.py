@@ -18,7 +18,6 @@ from typing import get_type_hints
 from typing import Literal
 from typing import Protocol
 from typing import TYPE_CHECKING
-from typing import TypeAlias
 from typing import TypeGuard
 
 import pytest
@@ -35,6 +34,7 @@ from rustfava.core.budgets import BudgetDict
 from rustfava.core.budgets import parse_budgets
 from rustfava.core.charts import dumps
 from rustfava.core.charts import loads
+from rustfava.core.conversion import Conversion
 from rustfava.core.query import QueryResult
 from rustfava.rustledger import types as rl_types
 from rustfava.rustledger.options import RLDisplayContext
@@ -103,7 +103,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 @pytest.fixture(scope="session")
 def compare_snapshot(
     request: pytest.FixtureRequest,
-) -> Generator[CompareFunc, None, None]:
+) -> Generator[CompareFunc]:
     """Compare on-disk snapshots, possibly updating if configured."""
     snap_dir = Path(__file__).parent / "__snapshots__"
     if not snap_dir.exists():
@@ -190,7 +190,8 @@ def snapshot(
         # replace today
         today = local_today()
         out = out.replace(str(today), "TODAY")
-        # replace entry hashes (hex strings from beancount or integers from rustledger)
+        # replace entry hashes (hex strings from beancount or integers
+        # from rustledger)
         out = re.sub(r'_hash": ?"[0-9a-f]+', '_hash":"ENTRY_HASH', out)
         out = re.sub(r'_hash": ?"-?[0-9]+', '_hash":"ENTRY_HASH', out)
         out = re.sub(r"context-[0-9a-f]+", "context-ENTRY_HASH", out)
@@ -204,7 +205,7 @@ def snapshot(
         out = re.sub(r'have_excel":\s*(false|False)', 'have_excel": true', out)
         # replace object addresses (hex is uppercase on Windows, lowercase on
         # POSIX — match both so snapshots are platform-independent)
-        out = re.sub(r' object at 0x[0-9a-fA-F]+>', ' object at ADDR>', out)
+        out = re.sub(r" object at 0x[0-9a-fA-F]+>", " object at ADDR>", out)
         # normalize non-deterministic set/dict repr in beancount_options
         out = re.sub(
             r'"commodities":"[^"]+"',
@@ -313,7 +314,7 @@ def budgets_doc(load_doc_custom_entries: Sequence[Custom]) -> BudgetDict:
 
 
 #: Slugs of the ledgers that are loaded for the test cases.
-LedgerSlug: TypeAlias = Literal[
+type LedgerSlug = Literal[
     "example",
     "query-example",
     "long-example",
@@ -322,7 +323,7 @@ LedgerSlug: TypeAlias = Literal[
     "off-by-one",
     "invalid-unicode",
 ]
-GetRustfavaLedger: TypeAlias = Callable[[LedgerSlug], RustfavaLedger]
+type GetRustfavaLedger = Callable[[LedgerSlug], RustfavaLedger]
 
 
 @pytest.fixture(scope="session")
@@ -364,6 +365,7 @@ def pytest_runtest_makereport(item: pytest.Function) -> None:
     extra_types = {
         "BudgetDict": BudgetDict,
         "Callable": Callable,
+        "Conversion": Conversion,
         "Custom": Custom,
         "Decimal": Decimal,
         "Directive": Directive,
@@ -382,9 +384,21 @@ def pytest_runtest_makereport(item: pytest.Function) -> None:
         "rl_types": rl_types,
         "pytest": pytest,
     }
-    annotations = get_type_hints(
-        item.obj, globalns=item.obj.__globals__, localns=extra_types
-    )
+    try:
+        annotations = get_type_hints(
+            item.obj, globalns=item.obj.__globals__, localns=extra_types
+        )
+    except NameError as err:
+        # A test annotates a parameter with a TYPE_CHECKING-only name that is
+        # missing from `extra_types` above. Without this guard the NameError
+        # escapes the hook and aborts the whole session as an INTERNALERROR
+        # (which is how the typeguard job silently broke after #214).
+        msg = (
+            f"Cannot resolve the type annotations of {item!r}: {err}. "
+            "If the annotation uses a TYPE_CHECKING-only import, add the name "
+            "to `extra_types` in tests/conftest.py."
+        )
+        raise FixtureTypeCheckError(msg) from err
 
     for attr, type_ in annotations.items():
         if attr in item.funcargs:
