@@ -41,14 +41,15 @@ def test_undecryptable_ledger_fails_cleanly() -> None:
 
 def test_encrypted_ledger_roundtrip(tmp_path: Path) -> None:
     """An encrypted ledger the keyring CAN decrypt loads end-to-end."""
-    if shutil.which("gpg") is None:
+    gpg = shutil.which("gpg")
+    if gpg is None:
         pytest.skip("gpg not installed")
     gnupg = tmp_path / "gnupg"
     gnupg.mkdir(mode=0o700)
-    env = {"GNUPGHOME": str(gnupg), "PATH": "/usr/bin:/bin"}
+    env = {"GNUPGHOME": str(gnupg), "PATH": os.environ.get("PATH", "")}
     gen = subprocess.run(
-        [  # noqa: S607
-            "gpg",
+        [
+            gpg,
             "--batch",
             "--pinentry-mode",
             "loopback",
@@ -77,8 +78,8 @@ def test_encrypted_ledger_roundtrip(tmp_path: Path) -> None:
     )
     ledger = tmp_path / "ledger.beancount.gpg"
     enc = subprocess.run(
-        [  # noqa: S607
-            "gpg",
+        [
+            gpg,
             "--batch",
             "--encrypt",
             "--recipient",
