@@ -32,12 +32,10 @@ The tag triggers several workflows:
 
 Monitor at: https://github.com/rustledger/rustfava/actions
 
-### 3. Approve PyPI deployment
+### 3. PyPI deployment
 
-The PyPI environment requires manual approval:
-- Go to the running `build-publish.yml` workflow
-- Click "Review deployments"
-- Approve the `pypi` environment
+Publishes automatically when the `build-publish.yml` workflow reaches the
+`pypi` job — no manual approval is configured (verified during v1.31.0).
 
 ### 4. Publish the GitHub release
 
@@ -57,7 +55,9 @@ Or via GitHub UI: https://github.com/rustledger/rustfava/releases
 
 ### 5. Update Nix flake sources
 
-Publishing the release triggers `update-flake-sources.yml`, which:
+The `update-flake-sources.yml` workflow fires when a tag-triggered
+`Desktop Release` run completes (it can also be run manually via
+`gh workflow run update-flake-sources.yml -f version=vX.Y.Z`). It:
 1. Downloads release tarballs
 2. Computes SRI hashes
 3. Creates a PR updating `desktop-sources.json`
@@ -79,7 +79,8 @@ nix run github:rustledger/rustfava --refresh
 uv tool install rustfava --upgrade
 
 # Docker
-docker pull ghcr.io/rustledger/rustfava:v0.1.x
+# NB: the image tag has no "v" prefix
+docker pull ghcr.io/rustledger/rustfava:0.1.x
 ```
 
 ## Release Artifacts
@@ -97,7 +98,9 @@ docker pull ghcr.io/rustledger/rustfava:v0.1.x
 Check that `desktop-release.yml` completed successfully. The release job only runs on tags.
 
 ### Nix flake sources not updated
-The `update-flake-sources.yml` workflow only triggers on `release: published` events. Make sure the release is not still in draft.
+The `update-flake-sources.yml` workflow triggers when the tag's `Desktop
+Release` run completes successfully. If it didn't fire, dispatch it manually:
+`gh workflow run update-flake-sources.yml -f version=vX.Y.Z`.
 
 ### PyPI publish failed
 Check the workflow logs. Common issues:
