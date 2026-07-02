@@ -1,11 +1,14 @@
 name: Update Flake Sources
 
 on:
-  # Trigger after Desktop Release completes (which uploads the tarballs)
+  # Trigger after Desktop Release completes (which uploads the tarballs).
+  # NB: no `branches:` filter — for tag-triggered runs head_branch is the TAG
+  # (e.g. v1.31.0), so filtering to main silently excluded every release and
+  # this automation never fired (found during the v1.31.0 release). The
+  # job-level `if` below does the actual gating.
   workflow_run:
     workflows: ["Desktop Release"]
     types: [completed]
-    branches: [main]
   workflow_dispatch:
     inputs:
       version:
