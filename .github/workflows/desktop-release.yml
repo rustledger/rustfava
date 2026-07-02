@@ -40,18 +40,32 @@ jobs:
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             sidecar_name: rustfava-server-x86_64-unknown-linux-gnu
-          # PyInstaller cannot cross-compile: it emits a binary for the
-          # runner's own arch. macos-latest is now Apple Silicon, so the x64
-          # sidecar must build on a real Intel runner (issue #193).
-          - os: macos-13
+            python-arch: x64
+          # PyInstaller cannot cross-compile: it emits a binary for the arch
+          # of the *Python that runs it*. GitHub retired the Intel macos-13
+          # image (#222), so the x64 sidecar now builds on an Apple Silicon
+          # runner with an x86_64 Python running under Rosetta 2 (hosted macOS
+          # ARM runners ship Rosetta): setup-python `architecture: x64` gives
+          # an Intel interpreter, pip then resolves x86_64 wheels, and
+          # PyInstaller emits a genuine x86_64-apple-darwin binary (#193).
+          - os: macos-14
             target: x86_64-apple-darwin
             sidecar_name: rustfava-server-x86_64-apple-darwin
+            python-arch: x64
+            # setup-python's macOS "x64" build is a universal2 binary: launched
+            # plainly on an ARM runner it runs as arm64 and PyInstaller then
+            # emits an arm64 sidecar (caught by the arch-verify step). Forcing
+            # the x86_64 slice via `arch -x86_64` makes pip resolve x86_64
+            # wheels and PyInstaller emit a genuine Intel binary.
+            py-run: arch -x86_64
           - os: macos-14
             target: aarch64-apple-darwin
             sidecar_name: rustfava-server-aarch64-apple-darwin
+            python-arch: arm64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             sidecar_name: rustfava-server-x86_64-pc-windows-msvc.exe
+            python-arch: x64
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -87,6 +101,8 @@ jobs:
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: '3.13'
+          # x64 on the macos-14 x86_64 entry = Intel Python under Rosetta (#222)
+          architecture: ${{ matrix.python-arch }}
           cache: 'pip'
 
       - name: Install Bun
@@ -94,11 +110,14 @@ jobs:
 
       - name: Install Python dependencies
         shell: bash
+        # ${{ matrix.py-run }} pins the interpreter arch (see the matrix note);
+        # `python -m pip` (not bare pip) so the prefix governs pip too.
         run: |
-          python -m pip install --upgrade pip
-          pip install pyinstaller
+          ${{ matrix.py-run }} python -m pip install --upgrade pip
+          ${{ matrix.py-run }} python -m pip install pyinstaller
           # Install runtime dependencies only (no rustfava install needed)
-          pip install "Flask>=2.2,<4" "Flask-Babel>=3,<5" "Jinja2>=3,<4" "Werkzeug>=2.2,<4" \
+          ${{ matrix.py-run }} python -m pip install \
+            "Flask>=2.2,<4" "Flask-Babel>=3,<5" "Jinja2>=3,<4" "Werkzeug>=2.2,<4" \
             "beangulp>=0.1" "cheroot>=8,<12" "click>=7,<9" "markdown2>=2.3.0,<3" \
             "ply>=3.11" "pydantic>=2.0" "watchfiles>=0.20.0" "beancount>=2,<4" \
             "Babel>=2.7,<3"
@@ -132,7 +151,7 @@ jobs:
       - name: Build sidecar with PyInstaller
         shell: bash
         run: |
-          pyinstaller contrib/pyinstaller_spec.spec --noconfirm
+          ${{ matrix.py-run }} python -m PyInstaller contrib/pyinstaller_spec.spec --noconfirm
 
       - name: Rename sidecar (Unix)
         if: runner.os != 'Windows'
@@ -246,9 +265,12 @@ jobs:
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             sidecar_name: rustfava-server-x86_64-unknown-linux-gnu
-          # Intel runner: builds x86_64 natively so the smoke test can launch
-          # the binary (an arm64 runner has no Rosetta by default), issue #193.
-          - os: macos-13
+          # The Intel macos-13 image is retired (#222). Rust cross-compiles
+          # x86_64-apple-darwin on Apple Silicon natively (the toolchain step
+          # installs matrix.target and tauri-action passes --target), and
+          # hosted macOS ARM runners ship Rosetta 2, so launching the built
+          # x64 binary for a smoke test also works (revisits issue #193).
+          - os: macos-14
             target: x86_64-apple-darwin
             sidecar_name: rustfava-server-x86_64-apple-darwin
           - os: macos-14
