@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 import threading
 import urllib.request
@@ -55,7 +56,7 @@ from rustfava.rustledger.engine import RustledgerError
 # IDs embed the full WIT package version (independent of the rustledger release
 # version), so a WIT bump means updating ``_WIT_VERSION`` here — a mismatch
 # makes ``get_export_index`` return ``None`` and every call fail.
-_WIT_VERSION = "3.1.0"
+_WIT_VERSION = "3.2.0"
 _LEDGER = f"rustledger:ledger/ledger@{_WIT_VERSION}"
 _BUILDER = f"rustledger:ledger/builder@{_WIT_VERSION}"
 _UTIL = f"rustledger:ledger/util@{_WIT_VERSION}"
@@ -66,6 +67,47 @@ _COMPONENT_WASM_URL = (
     "https://github.com/rustledger/rustledger/releases/download/"
     f"{RUSTLEDGER_VERSION}/rustledger-ffi-component-{RUSTLEDGER_VERSION}.wasm"
 )
+
+
+# -- host capability: GPG decryption (WIT 3.2.0, rustledger#1667) -------------
+#
+# A WASI guest can neither spawn ``gpg`` nor reach the user's keyring, so the
+# component imports ``rustledger:ledger/host@<wit>`` with a single
+# ``decrypt: func(ciphertext: list<u8>) -> result<string, string>`` and calls
+# it when it detects an encrypted (``.gpg``/``.asc``) input. The host runs the
+# system ``gpg --batch --decrypt`` (keyring + gpg-agent for passphrases),
+# matching rustledger's native loader semantics.
+_HOST = f"rustledger:ledger/host@{_WIT_VERSION}"
+
+
+def _host_decrypt(_store: Any, ciphertext: Any) -> Variant:
+    try:
+        proc = subprocess.run(
+            ["gpg", "--batch", "--decrypt"],  # noqa: S607
+            input=bytes(ciphertext),
+            capture_output=True,
+            check=False,
+        )
+    except OSError as exc:
+        return Variant(tag="err", payload=f"failed to run gpg: {exc}")
+    if proc.returncode != 0:
+        return Variant(
+            tag="err",
+            payload=proc.stderr.decode("utf-8", "replace").strip()
+            or f"gpg exited with status {proc.returncode}",
+        )
+    try:
+        return Variant(tag="ok", payload=proc.stdout.decode("utf-8"))
+    except UnicodeDecodeError as exc:
+        return Variant(
+            tag="err", payload=f"decrypted content is not valid UTF-8: {exc}"
+        )
+
+
+def _define_host_interface(linker: Linker) -> None:
+    """Register the ``host`` interface the component imports (WIT >= 3.2.0)."""
+    with linker.root() as root, root.add_instance(_HOST) as host:
+        host.add_func("decrypt", _host_decrypt)
 
 
 def _default_wasm_path() -> Path:
@@ -575,6 +617,7 @@ class RustledgerComponentEngine:
         store.set_wasi(wasi)
         linker = Linker(self._engine)
         linker.add_wasip2()
+        _define_host_interface(linker)
         inst = linker.instantiate(store, self._component)
         return store, inst
 
@@ -617,7 +660,7 @@ class RustledgerComponentEngine:
     # -- public API (mirrors RustledgerEngine) -----------------------------
 
     def version(self) -> str:
-        """Return the component's ``api_version`` string (e.g. ``"2.1"``)."""
+        """Return the component's ``api_version`` string (e.g. ``"3.2"``)."""
         return self._call(_LEDGER, "version", [])
 
     def load(
