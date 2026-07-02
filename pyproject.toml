@@ -143,6 +143,9 @@ include-package-data = true
 where = ["src"]
 
 [tool.setuptools_scm]
+# Emit the resolved version into the package so builds without dist-info
+# metadata (PyInstaller sidecar, .deb) can still report it (issue #191).
+version_file = "src/rustfava/_version.py"
 
 [tool.black]
 line-length = 79
@@ -186,6 +189,8 @@ testpaths = ["tests"]
 [tool.coverage.run]
 branch = true
 omit = [
+    # setuptools_scm-generated at build time (issue #191); not source code
+    "src/rustfava/_version.py",
     "src/rustfava/beans/types.py",
     "src/rustfava/ext/auto_commit.py",
     # Rustledger integration - new code with many error handling paths

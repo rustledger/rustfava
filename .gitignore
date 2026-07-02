@@ -44,6 +44,9 @@ npm-debug.log
 /desktop/bun.lockb
 /desktop/.vite/
 
+# setuptools_scm-generated version file
+/src/rustfava/_version.py
+
 # Rustledger build artifacts
 /src/rustfava/rustledger/.wasm-version
 /src/rustfava/rustledger/*.wasm
