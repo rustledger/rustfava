@@ -52,6 +52,12 @@ jobs:
             target: x86_64-apple-darwin
             sidecar_name: rustfava-server-x86_64-apple-darwin
             python-arch: x64
+            # setup-python's macOS "x64" build is a universal2 binary: launched
+            # plainly on an ARM runner it runs as arm64 and PyInstaller then
+            # emits an arm64 sidecar (caught by the arch-verify step). Forcing
+            # the x86_64 slice via `arch -x86_64` makes pip resolve x86_64
+            # wheels and PyInstaller emit a genuine Intel binary.
+            py-run: arch -x86_64
           - os: macos-14
             target: aarch64-apple-darwin
             sidecar_name: rustfava-server-aarch64-apple-darwin
@@ -104,11 +110,14 @@ jobs:
 
       - name: Install Python dependencies
         shell: bash
+        # ${{ matrix.py-run }} pins the interpreter arch (see the matrix note);
+        # `python -m pip` (not bare pip) so the prefix governs pip too.
         run: |
-          python -m pip install --upgrade pip
-          pip install pyinstaller
+          ${{ matrix.py-run }} python -m pip install --upgrade pip
+          ${{ matrix.py-run }} python -m pip install pyinstaller
           # Install runtime dependencies only (no rustfava install needed)
-          pip install "Flask>=2.2,<4" "Flask-Babel>=3,<5" "Jinja2>=3,<4" "Werkzeug>=2.2,<4" \
+          ${{ matrix.py-run }} python -m pip install \
+            "Flask>=2.2,<4" "Flask-Babel>=3,<5" "Jinja2>=3,<4" "Werkzeug>=2.2,<4" \
             "beangulp>=0.1" "cheroot>=8,<12" "click>=7,<9" "markdown2>=2.3.0,<3" \
             "ply>=3.11" "pydantic>=2.0" "watchfiles>=0.20.0" "beancount>=2,<4" \
             "Babel>=2.7,<3"
@@ -142,7 +151,7 @@ jobs:
       - name: Build sidecar with PyInstaller
         shell: bash
         run: |
-          pyinstaller contrib/pyinstaller_spec.spec --noconfirm
+          ${{ matrix.py-run }} python -m PyInstaller contrib/pyinstaller_spec.spec --noconfirm
 
       - name: Rename sidecar (Unix)
         if: runner.os != 'Windows'
