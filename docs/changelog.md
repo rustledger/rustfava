@@ -16,47 +16,65 @@ Key changes from Fava:
 - **Optional beancount compatibility**: If you need to use Beancount plugins or
   the import system, install with `uv pip install rustfava[beancount-compat]`.
 
+## v1.31.0 (2026-07-02)
+
+Engine upgraded from rustledger v0.16.5 to v0.19.0, bringing:
+
+- **Encrypted ledgers now work end-to-end**: rustledger v0.19.0 delegates GPG
+  decryption to the host (WIT 3.2.0), and rustfava provides it via the system
+  `gpg` (keyring + gpg-agent). Previously encrypted files were detect-only and
+  failed with a clean error.
+- **Holdings report fixed**: `ORDER BY` on a raw column aliased in `SELECT`
+  (e.g. `cost_date`) no longer fails compilation — the Holdings page rendered
+  HTTP 500 for any ledger with cost-dated lots (#190).
+- **Help page fixed on packaged installs**: the version lookup no longer raises
+  `PackageNotFoundError` on builds without package metadata (PyInstaller
+  sidecar, `.deb`) — the page rendered HTTP 500 (#191). Frozen binaries now
+  report their real version.
+- Booking and validation fixes from rustledger v0.17–v0.19 (lot-label on
+  reduction, balance-assertion currency handling, oversell deduplication), plus
+  exact-Decimal JSON and spreadsheet exports (#215, #216).
+
 ## v1.30 (2024-12-29)
 
-*Note: This entry describes the original Fava release. Rustfava is based on
-this version with the rustledger integration.*
+*Note: This entry describes the original Fava release. Rustfava is based on this
+version with the rustledger integration.*
 
 Under the hood, this also upgrades Svelte (the framework used for the frontend
 parts) to version 5.
 
 ## v1.29 (2024-10-09)
 
-With this release, query results are now rendered in the frontend. The
-templates for HTML rendering are still available but extension authors are
-encouraged to switch, see the statistics report for an example how this can be
-done. This release adds CSS styles for dark-mode. Numerical comparisons on the
-units, price or cost are now possible in rustfava filters. As the watchfiles based
-watcher might not work correctly in some setups with network file systems, you
-can switch to the (slower) polling based watcher as well. The `default-file`
-option, if set, is now considered instead of the "main" file when inserting an
-entry.
+With this release, query results are now rendered in the frontend. The templates
+for HTML rendering are still available but extension authors are encouraged to
+switch, see the statistics report for an example how this can be done. This
+release adds CSS styles for dark-mode. Numerical comparisons on the units, price
+or cost are now possible in rustfava filters. As the watchfiles based watcher
+might not work correctly in some setups with network file systems, you can
+switch to the (slower) polling based watcher as well. The `default-file` option,
+if set, is now considered instead of the "main" file when inserting an entry.
 
 ## v1.28 (2024-07-07)
 
 This release accumulates a couple of minor fixes and improvements. Under the
-hood, the file change detection is now powered by watchfiles instead of
-polling, which is more performant.
+hood, the file change detection is now powered by watchfiles instead of polling,
+which is more performant.
 
 ## v1.27 (2024-01-06)
 
 It is now possible to convert to a sequence of currencies. Posting metadata is
-now supported in the entry forms. The editor should now be a bit more
-performant as the previous parses will be reused better. For compatibility with
-extensions using them, the Javascript and CSS for the "old" account trees has
-been re-added.
+now supported in the entry forms. The editor should now be a bit more performant
+as the previous parses will be reused better. For compatibility with extensions
+using them, the Javascript and CSS for the "old" account trees has been
+re-added.
 
 ## v1.26 (2023-09-04)
 
 This release brings various improvements to the charts, like allowing the
 toggling of currencies by clicking on their names in the chart legend. The
 account balance trees in rustfava are now rendered in the frontend, fixing some
-minor bugs in the process and easing maintenance. rustfava extensions can now also
-provide their own endpoints.
+minor bugs in the process and easing maintenance. rustfava extensions can now
+also provide their own endpoints.
 
 ## v1.25 (2023-07-17)
 
@@ -64,10 +82,11 @@ With this release, extensions can now ship Javascript code to run in the
 frontend. The editor in rustfava now uses a tree-sitter grammar to obtain a full
 parsed syntax tree, which makes editor functionality more maintainable and
 should improve the autocompletion. The Flask WSGI app is now created using the
-application factory pattern - users who use the rustfava WSGI app directly should
-switch from `rustfava.application.app` to the `create_app` function in
-`rustfava.application`. This release also drops support for Python 3.7 and contains
-a couple of minor fixes and changes, in particular various styling fixes.
+application factory pattern - users who use the rustfava WSGI app directly
+should switch from `rustfava.application.app` to the `create_app` function in
+`rustfava.application`. This release also drops support for Python 3.7 and
+contains a couple of minor fixes and changes, in particular various styling
+fixes.
 
 ## v1.24 (2023-02-21)
 
@@ -84,18 +103,19 @@ This release accumulates a couple of minor fixes and changes.
 
 This release brings stacked bar charts, which are a great way to visualise
 income broken down per account per month for example. The inferred display
-precision for currencies is now also used in the frontend and can be
-overwritten with commodity metadata.
+precision for currencies is now also used in the frontend and can be overwritten
+with commodity metadata.
 
 The `journal-show`, `journal-show-document`, and `journal-show-transaction`
-rustfava-options have been removed. The types of entries that to show in the journal
-are now automatically stored in the browser of the user (in localStorage).
+rustfava-options have been removed. The types of entries that to show in the
+journal are now automatically stored in the browser of the user (in
+localStorage).
 
 As usual, this release also includes a couple of bug fixes and minor
-improvements. To avoid some race conditions and improve perfomance, the
-per-file Ledger class is not filtered anymore in-place but rather the filtered
-data is generated per request - some extensions might have to adjust for this
-and use `g.filtered` instead of `ledger` for some attributes.
+improvements. To avoid some race conditions and improve perfomance, the per-file
+Ledger class is not filtered anymore in-place but rather the filtered data is
+generated per request - some extensions might have to adjust for this and use
+`g.filtered` instead of `ledger` for some attributes.
 
 ## v1.21 (2022-02-06)
 
@@ -110,8 +130,8 @@ parts.
 ## v1.20 (2021-09-19)
 
 In this release, the document page now shows counts in the account tree and
-allows collapsing of accounts in the tree. Parts of the charts in the future
-are now desaturated. This release contains a couple of bug fixes as usual.
+allows collapsing of accounts in the tree. Parts of the charts in the future are
+now desaturated. This release contains a couple of bug fixes as usual.
 
 ## v1.19 (2021-05-18)
 
@@ -129,15 +149,15 @@ This release contains couple of small improvements and various bug fixes.
 
 ## v1.17 (2020-11-15)
 
-This release adds a document preview to the import page, as well as support
-for Python 3.9. It also fixes a couple of bugs.
+This release adds a document preview to the import page, as well as support for
+Python 3.9. It also fixes a couple of bugs.
 
 ## v1.16 (2020-10-18)
 
 This release brings area charts as an alternative option to view the various
-line charts in rustfava and a Catalan translation for rustfava. There is also now an
-option to set the indentation of inserted Beancount entries. As usual this
-release also includes various minor fixes and improvements.
+line charts in rustfava and a Catalan translation for rustfava. There is also
+now an option to set the indentation of inserted Beancount entries. As usual
+this release also includes various minor fixes and improvements.
 
 ## v1.15 (2020-05-30)
 
@@ -152,21 +172,21 @@ allows setting a default conversion.
 
 ## v1.13 (2020-02-01)
 
-Rustfava can now display charts for BQL queries - if they have exactly two columns
-with the first being a date or string and the second an inventory, then a line
-chart or treemap chart is shown on the query page.
+Rustfava can now display charts for BQL queries - if they have exactly two
+columns with the first being a date or string and the second an inventory, then
+a line chart or treemap chart is shown on the query page.
 
 ## v1.12 (2019-12-03)
 
-Apart from plenty of bug fixes, this release mainly contains improvements to
-the forms to add transactions: postings can now be dragged and the full cost
-syntax of Beancount should supported.
+Apart from plenty of bug fixes, this release mainly contains improvements to the
+forms to add transactions: postings can now be dragged and the full cost syntax
+of Beancount should supported.
 
 ## v1.11 (2019-08-20)
 
-The import page of rustfava has been reworked - it now supports moving files to the
-documents folder and the import process should be a bit more interactive. This
-release also contains various fixes and a new `collapse-pattern` option to
+The import page of rustfava has been reworked - it now supports moving files to
+the documents folder and the import process should be a bit more interactive.
+This release also contains various fixes and a new `collapse-pattern` option to
 collapse accounts in account trees based on regular expressions (and replaces
 the use of the `rustfava-collapse-account` metadata entry).
 
@@ -183,8 +203,8 @@ worth chart will now follow the selected conversion.
 ## v1.9 (2018-10-08)
 
 In this release, the click behaviour has been updated to allow filtering for
-payees. The entry input forms now allow inputting prices and costs. As
-always, bugs have been fixed.
+payees. The entry input forms now allow inputting prices and costs. As always,
+bugs have been fixed.
 
 ## v1.8 (2018-07-25)
 
@@ -203,21 +223,21 @@ Other changes:
 
 The entry filters have been reworked in this release and should now support for
 more flexible filtering of the entries. See the help page on how the new syntax
-works. Also, when completing the payee in the transaction form, the postings
-of the last transaction for this payee will be auto-filled.
+works. Also, when completing the payee in the transaction form, the postings of
+the last transaction for this payee will be auto-filled.
 
 Other changes:
 
-- The rustfava-option to hide the charts has been removed. This is now tracked in
-  the page URL.
+- The rustfava-option to hide the charts has been removed. This is now tracked
+  in the page URL.
 - As always, bugs have been fixed.
 
 ## v1.6 (2017-10-06)
 
-This is a release with various small changes and mainly some speed
-improvements to the Balance Sheet and the net worth calculation. Also, if 'At
-Value' is selected, the current unrealized gain is shown in parentheses in the
-Balance Sheet.
+This is a release with various small changes and mainly some speed improvements
+to the Balance Sheet and the net worth calculation. Also, if 'At Value' is
+selected, the current unrealized gain is shown in parentheses in the Balance
+Sheet.
 
 Other changes:
 
@@ -226,8 +246,8 @@ Other changes:
 
 ## v1.5 (2017-07-23)
 
-Rustfava now has an interface to edit single entries. Clicking on the entry date in
-the Journal will open an overlay that shows the entry context and allows
+Rustfava now has an interface to edit single entries. Clicking on the entry date
+in the Journal will open an overlay that shows the entry context and allows
 editing just the lines of that entry.
 
 Other changes:
@@ -242,8 +262,8 @@ Other changes:
 
 ## v1.4 (2017-05-14)
 
-Rustfava now provides an interface for Beancount's import system that allows you to
-import transactions from your bank for example.
+Rustfava now provides an interface for Beancount's import system that allows you
+to import transactions from your bank for example.
 
 Rustfava can now show your balances at market value or convert them to a single
 currency if your file contains the necessary price information.
@@ -261,10 +281,10 @@ Other changes:
 
 ## v1.3 (2017-03-15)
 
-The translations of rustfava are on [POEditor.com](https://poeditor.com/projects/view?id=90283),
-which has helped us get translations in five more languages: Chinese
-(simplified), Dutch, French, Portuguese, and Spanish. A big thank you to the
-new translators!
+The translations of rustfava are on
+[POEditor.com](https://poeditor.com/projects/view?id=90283), which has helped us
+get translations in five more languages: Chinese (simplified), Dutch, French,
+Portuguese, and Spanish. A big thank you to the new translators!
 
 The transaction form has been improved, it now supports adding metadata and the
 suggestions will be ranked by how often and recently they occur (using
@@ -273,10 +293,10 @@ exponential decay).
 The Query page supports all commands of the `bean-query` shell and shares its
 history of recently used queries.
 
-Rustfava has gained a basic extension mechanism. Extensions allow you to run hooks
-at various points, e.g., after adding a transaction. They are specified using
-the `extensions` option and for an example, see the `rustfava.ext.auto_commit`
-extension.
+Rustfava has gained a basic extension mechanism. Extensions allow you to run
+hooks at various points, e.g., after adding a transaction. They are specified
+using the `extensions` option and for an example, see the
+`rustfava.ext.auto_commit` extension.
 
 Other changes:
 
@@ -287,11 +307,11 @@ Other changes:
 
 ## v1.2 (2016-12-25)
 
-You can now add transactions from within rustfava. The form supports autocompletion
-for most fields.
+You can now add transactions from within rustfava. The form supports
+autocompletion for most fields.
 
-Rustfava will now show a little bubble in the sidebar for the number of events in
-the next week. This can be configured with the `upcoming-events` option.
+Rustfava will now show a little bubble in the sidebar for the number of events
+in the next week. This can be configured with the `upcoming-events` option.
 
 Other changes:
 
@@ -303,10 +323,10 @@ Other changes:
 
 ## v1.1 (2016-11-19)
 
-You can now upload documents by dropping them onto transactions, which will
-also add the file path as `statement` metadata to the transaction. rustfava also
-ships with a plugin to link these transactions with the generated documents.
-See the help pages for details.
+You can now upload documents by dropping them onto transactions, which will also
+add the file path as `statement` metadata to the transaction. rustfava also
+ships with a plugin to link these transactions with the generated documents. See
+the help pages for details.
 
 This is the first release for which we provide compiled binaries (for macOS and
 Linux). These do not have any dependencies and can simply be executed from the
@@ -326,13 +346,13 @@ list. Some highlights:
 
 - The layout has been tweaked and we use some nicer fonts.
 - Rustfava looks and works much better on smaller screens.
-- Rustfava loads most pages asynchronously, so navigating rustfava is much faster and
-  responsive.
+- Rustfava loads most pages asynchronously, so navigating rustfava is much
+  faster and responsive.
 
 rustfava's configuration is not read from a configuration file anymore but can
 rather be specified using custom entries in the Beancount file. Some options
-have also been removed or renamed, so check rustfava's help page on the available
-options when upgrading from v0.3.0.
+have also been removed or renamed, so check rustfava's help page on the
+available options when upgrading from v0.3.0.
 
 There have been many changes under the hood to improve rustfava's codebase and a
 lot of bugs have been squashed.
@@ -355,8 +375,8 @@ lot of bugs have been squashed.
 
 - All charts are now rendered with d3.js.
 - The title of a page is now shown in the header to save screen space.
-- Changed shortcut for Journal from `g g` to `g j` as the Journal was
-  renamed from "General Journal" to "Journal".
+- Changed shortcut for Journal from `g g` to `g j` as the Journal was renamed
+  from "General Journal" to "Journal".
 
 ### New configuration options
 
@@ -379,8 +399,8 @@ lot of bugs have been squashed.
   charts.
 - Show metadata for postings in the Journal.
 - The editor now supports org-mode style folding.
-- Show colored dots for all the postings of a transaction in the Journal
-  report. This way flagged postings can be quickly spotted.
+- Show colored dots for all the postings of a transaction in the Journal report.
+  This way flagged postings can be quickly spotted.
 - Add keyboard shortcuts for save to source editor.
 
 ### Changes
@@ -395,14 +415,14 @@ lot of bugs have been squashed.
 
 ### New configuration options
 
-- `editor-strip-trailing-whitespace` to enable trimming of trailing
-  whitespace in the Source editor (default: "false").
-- `show-closed-accounts` to show closed accounts in tree tables, for example
-  on the balance sheet (default: "false").
-- `show-accounts-with-zero-balance` to show accounts with a balance of zero
+- `editor-strip-trailing-whitespace` to enable trimming of trailing whitespace
+  in the Source editor (default: "false").
+- `show-closed-accounts` to show closed accounts in tree tables, for example on
+  the balance sheet (default: "false").
+- `show-accounts-with-zero-balance` to show accounts with a balance of zero in
+  tree tables (default: "true").
+- `show-accounts-with-zero-transactions` to show accounts with no transactions
   in tree tables (default: "true").
-- `show-accounts-with-zero-transactions` to show accounts with no
-  transactions in tree tables (default: "true").
 
 ### Fixes
 
@@ -460,11 +480,11 @@ Bump release to remove unused draft code.
 
 ## v0.2.3 (2016-02-15)
 
-Bumped version to communicate that installing via `pip install` now works,
-all requirements included.
+Bumped version to communicate that installing via `pip install` now works, all
+requirements included.
 
 ## Earlier Versions
 
-It was not possible to install any of the earlier versions only using `pip`
-and you may consult the git log for earlier changes. The first commit in the
-git repository was on December 4th, 2015.
+It was not possible to install any of the earlier versions only using `pip` and
+you may consult the git log for earlier changes. The first commit in the git
+repository was on December 4th, 2015.
