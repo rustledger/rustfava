@@ -32,15 +32,15 @@ def _resolve_version() -> str:
     previously 500'd the help page, see issue #191).
     """
     try:
-        from importlib.metadata import version
+        from importlib.metadata import version as metadata_version
 
-        return version("rustfava")
-    except Exception:  # noqa: BLE001 - any metadata failure falls through
+        return metadata_version("rustfava")
+    except Exception:  # noqa: BLE001, S110 - any metadata failure falls through
         pass
     try:
-        from ._version import version  # type: ignore[import-not-found]
+        from ._version import version as scm_version
 
-        return version
+        return str(scm_version)
     except Exception:  # noqa: BLE001
         return "unknown"
 

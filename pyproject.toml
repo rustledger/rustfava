@@ -189,6 +189,8 @@ testpaths = ["tests"]
 [tool.coverage.run]
 branch = true
 omit = [
+    # setuptools_scm-generated at build time (issue #191); not source code
+    "src/rustfava/_version.py",
     "src/rustfava/beans/types.py",
     "src/rustfava/ext/auto_commit.py",
     # Rustledger integration - new code with many error handling paths
