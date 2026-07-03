@@ -56,7 +56,7 @@ from rustfava.rustledger.engine import RustledgerError
 # IDs embed the full WIT package version (independent of the rustledger release
 # version), so a WIT bump means updating ``_WIT_VERSION`` here — a mismatch
 # makes ``get_export_index`` return ``None`` and every call fail.
-_WIT_VERSION = "3.2.0"
+_WIT_VERSION = "3.3.0"
 _LEDGER = f"rustledger:ledger/ledger@{_WIT_VERSION}"
 _BUILDER = f"rustledger:ledger/builder@{_WIT_VERSION}"
 _UTIL = f"rustledger:ledger/util@{_WIT_VERSION}"
@@ -233,30 +233,29 @@ def _finalize_query_result(result: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-# The WIT ``cost-number`` variant. rustledger's JSON surface tags this one by
-# ``kind`` (``#[serde(tag = "kind")]`` on ``CostNumber``), not by the generic
-# ``type`` the marshaller uses for every other variant — and ``per-unit-from-
-# total`` spreads its two values as ``per_unit``/``total`` rather than a
-# ``value`` tuple. `types.py`'s ``cost_number_values`` reads exactly that
-# shape, so the cost basis is silently dropped if we emit the generic form.
+# The WIT ``cost-number`` variant. Since v0.20 (WIT 3.3) rustledger's JSON
+# surface tags it by ``type`` with a ``value`` payload like every other
+# variant (``per-unit-from-total`` carries a two-string list); v0.19 tagged
+# it by ``kind`` and spread ``per_unit``/``total`` as fields, and the
+# JSON-RPC layer sent a flat per-unit string — ``_cost_number_from_json``
+# accepts all three so replayed entry JSON keeps loading. WIT 3.3 also added
+# a ``compound`` input case, so detection is a superset check.
 _COST_NUMBER_CASES = frozenset({"per-unit", "total", "per-unit-from-total"})
 
 
 def _is_cost_number(vtype: Any) -> bool:
     """Whether ``vtype`` is the WIT ``cost-number`` variant."""
     return isinstance(vtype, VariantType) and (
-        frozenset(name for name, _ in vtype.cases) == _COST_NUMBER_CASES
+        frozenset(name for name, _ in vtype.cases) >= _COST_NUMBER_CASES
     )
 
 
 def _cost_number_to_json(value: Any, vtype: Any) -> dict[str, Any]:
-    """Marshal a ``cost-number`` to the ``kind``-tagged JSON-RPC shape."""
+    """Marshal a ``cost-number`` to the v0.20 ``type``-tagged JSON shape."""
+    # NB: _marshal lowers WIT tuples to lists, so the pair case needs no
+    # special handling here.
     payload = _marshal(value.payload, dict(vtype.cases)[value.tag])
-    kind = _snake(value.tag)
-    if value.tag == "per-unit-from-total":
-        per_unit, total = payload
-        return {"kind": kind, "per_unit": per_unit, "total": total}
-    return {"kind": kind, "value": payload}
+    return {"type": _snake(value.tag), "value": payload}
 
 
 def _is_typed_value(vtype: Any) -> bool:
@@ -319,9 +318,13 @@ def _cost_number_from_json(value: Any) -> Any:
     if isinstance(value, dict):
         kind = value.get("kind") or value.get("type")
         tag = _kebab(str(kind))
+        payload = value.get("value")
         if tag == "per-unit-from-total":
+            if isinstance(payload, (list, tuple)):  # v0.20 pair-as-list
+                return Variant(tag, (str(payload[0]), str(payload[1])))
+            # v0.19 spread the pair as per_unit/total fields
             return Variant(tag, (str(value["per_unit"]), str(value["total"])))
-        return Variant(tag, str(value["value"]))
+        return Variant(tag, str(payload))
     # A bare scalar (``_cost_to_json``'s flat string) is a per-unit cost.
     return Variant("per-unit", str(value))
 

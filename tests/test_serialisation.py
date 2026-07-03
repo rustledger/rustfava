@@ -25,7 +25,6 @@ if TYPE_CHECKING:  # pragma: no cover
 
     from rustfava.beans.abc import Directive
     from rustfava.beans.abc import Meta
-    from rustfava.beans.abc import Posting
 
     from .conftest import SnapshotFunc
 
