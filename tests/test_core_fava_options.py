@@ -8,10 +8,10 @@ from typing import TYPE_CHECKING
 import pytest
 
 from rustfava.core.charts import dumps
-from rustfava.core.fava_options import RustfavaOptions
 from rustfava.core.fava_options import InsertEntryOption
 from rustfava.core.fava_options import NotARegularExpressionError
 from rustfava.core.fava_options import parse_options
+from rustfava.core.fava_options import RustfavaOptions
 from rustfava.core.fava_options import UnknownLocaleOptionError
 from rustfava.core.fava_options import UnsupportedLanguageOptionError
 from rustfava.util.date import FiscalYearEnd

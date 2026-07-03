@@ -143,8 +143,8 @@ def test_numberify_rows_renders_inventory_as_amount_strings() -> None:
     """
     rows: list[tuple[object, ...]] = [
         ({"USD": Decimal("502.25")},),
-        ({"ITOT": Decimal("60")},),
-        ({"USD": Decimal("5"), "EUR": Decimal("3")},),
+        ({"ITOT": Decimal(60)},),
+        ({"USD": Decimal(5), "EUR": Decimal(3)},),
     ]
     columns = (object(),)  # single column; branch keys off the value, not col
 

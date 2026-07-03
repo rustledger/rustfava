@@ -255,24 +255,23 @@ def test_clamp_roundtrip_with_rich_shapes(
         '2020-01-02 * "buy with total cost"\n'
         "  Assets:Brokerage  2 VTI {5.00 # 10.00 USD}\n"
         '    lot-note: "kept"\n'
-        "  Assets:Cash  -10.00 USD\n"
+        "  Assets:Cash  -20.00 USD\n"
         '2020-01-03 custom "budget" 42 TRUE "text"\n'
     )
-    # No assertion on load errors: the engine's `#`-cost balance weighing is
-    # currently wrong in both directions (rustledger#1700); this test targets
-    # marshalling, and the posting carries the correct per-unit-from-total
-    # cost shape either way.
+    # {5.00 # 10.00} on 2 units weighs 2*5 + 10 = 20 (rustledger#1700, fixed
+    # in v0.20): the ledger balances, and booking resolves the compound cost
+    # to the effective per-unit/total pair (20/2 = 10.00 per unit).
+    assert not loaded.get("errors"), loaded.get("errors")
     entries = loaded["entries"]
     txn = next(e for e in entries if e.get("type") == "transaction")
     cost_in = txn["postings"][0]["cost"]["number"]
-    assert cost_in["kind"] == "per_unit_from_total"
+    assert cost_in["type"] == "per_unit_from_total"
     result = engine.clamp_entries(entries, "2020-01-01", "2021-01-01")
     out = next(e for e in result["entries"] if e.get("type") == "transaction")
     cost_out = out["postings"][0]["cost"]["number"]
     assert cost_out == {
-        "kind": "per_unit_from_total",
-        "per_unit": "5.00",
-        "total": "10.00",
+        "type": "per_unit_from_total",
+        "value": ["10.00", "20.00"],
     }
 
 

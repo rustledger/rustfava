@@ -69,7 +69,14 @@ def test_bare_currency_cost_falls_back_to_units() -> None:
 
 
 def test_bare_currency_cost_balance_sheet_renders() -> None:
-    """A ledger with a bare ``{CUR}`` cost renders at cost without a 500."""
+    """A ledger with a bare ``{CUR}`` cost renders at cost without a 500.
+
+    Since rustledger v0.20.1 (#1709) the engine infers an augmenting empty
+    cost from the residual, so ``10 ABC {USD}`` against ``-50 USD`` books at
+    an inferred 5.00 USD per unit and AT_COST converts properly (older
+    engines left ``cost.number`` as None and valuation fell back to units —
+    the crash-free invariant this test guards covers both worlds).
+    """
     src = (
         "2020-01-01 open Assets:X\n"
         "2020-01-01 open Assets:Cash\n"
@@ -81,4 +88,4 @@ def test_bare_currency_cost_balance_sheet_renders() -> None:
     node = Tree(entries).get("Assets:X")
     # AT_COST runs unconditionally in the balance-sheet render; must not raise.
     reduced = AT_COST.apply(node.balance)
-    assert dict(reduced) == {"ABC": Decimal(10)}
+    assert dict(reduced) == {"USD": Decimal(50)}

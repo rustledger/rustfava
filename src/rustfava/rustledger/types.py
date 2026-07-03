@@ -22,11 +22,14 @@ if TYPE_CHECKING:
 
 
 class AsDictMixin:
-    """Mixin that provides _asdict() method for compatibility with beancount's named tuples."""
+    """Provide ``_asdict()`` for beancount named-tuple compatibility."""
 
     def _asdict(self) -> dict[str, Any]:
-        """Return a dict of the dataclass fields, like named tuple _asdict()."""
-        return {f.name: getattr(self, f.name) for f in fields(self)}  # type: ignore[arg-type]
+        """Return the dataclass fields as a dict, like a named tuple."""
+        return {
+            f.name: getattr(self, f.name)
+            for f in fields(self)  # type: ignore[arg-type]
+        }
 
 
 class FrozenDict(dict[str, Any]):
@@ -37,15 +40,20 @@ class FrozenDict(dict[str, Any]):
     """
 
     def __hash__(self) -> int:  # type: ignore[override]
-        """Return hash based on sorted items, handling nested unhashable types."""
+        """Hash sorted items, handling nested unhashable types."""
+
         def make_hashable(v: Any) -> Any:
             if isinstance(v, dict):
-                return tuple(sorted((k, make_hashable(val)) for k, val in v.items()))
+                return tuple(
+                    sorted((k, make_hashable(val)) for k, val in v.items())
+                )
             if isinstance(v, list):
                 return tuple(make_hashable(item) for item in v)
             return v
 
-        return hash(tuple(sorted((k, make_hashable(v)) for k, v in self.items())))
+        return hash(
+            tuple(sorted((k, make_hashable(v)) for k, v in self.items()))
+        )
 
     def __setitem__(self, key: Any, value: Any) -> None:
         """Prevent modification."""
@@ -63,9 +71,12 @@ class FrozenDict(dict[str, Any]):
 
     def __deepcopy__(self, memo: dict[int, Any]) -> dict[str, Any]:
         """Return a regular mutable dict deep copy."""
-        import copy
+        import copy  # noqa: PLC0415 - deepcopy is rare; keep import lazy
 
-        return {copy.deepcopy(k, memo): copy.deepcopy(v, memo) for k, v in self.items()}
+        return {
+            copy.deepcopy(k, memo): copy.deepcopy(v, memo)
+            for k, v in self.items()
+        }
 
 
 # Register our types with Fava's ABCs
@@ -101,13 +112,20 @@ def cost_number_values(
     Returns ``(None, None)`` when there is no cost number.
     """
     if isinstance(raw, dict):
-        kind = raw.get("kind")
+        kind = raw.get("kind") or raw.get("type")
+        value = raw.get("value")
         if kind == "per_unit":
             return Decimal(raw["value"]), None
         if kind == "total":
             return None, Decimal(raw["value"])
         if kind == "per_unit_from_total":
-            return Decimal(raw["per_unit"]), Decimal(raw["total"])
+            # v0.20 sends the pair as a list; v0.19 spread it as fields
+            pair = (
+                value
+                if isinstance(value, (list, tuple))
+                else (raw["per_unit"], raw["total"])
+            )
+            return Decimal(pair[0]), Decimal(pair[1])
         return None, None
     if raw:
         return Decimal(str(raw)), None
@@ -142,10 +160,11 @@ class RLCost:
 
         Args:
             data: JSON dict with cost data
-            default_date: Date to use if cost has no date (e.g., transaction date).
-                         This matches beancount's behavior of filling in missing
-                         cost dates with the transaction date.
-            units_number: Number of units (for computing per-unit cost from total)
+            default_date: Date to use if cost has no date (e.g., the
+                transaction date), matching beancount's behavior of
+                filling in missing cost dates.
+            units_number: Number of units (for computing per-unit cost
+                from a total)
         """
         if data is None or not data:
             return None
@@ -223,8 +242,8 @@ class RLPosting:
 
         Args:
             data: JSON dict with posting data
-            transaction_date: The date of the parent transaction. Used to fill in
-                            missing cost dates (beancount behavior).
+            transaction_date: The date of the parent transaction, used to
+                fill in missing cost dates (beancount behavior).
         """
         meta = data.get("meta")
         units = RLAmount.from_json(data.get("units"))
@@ -322,9 +341,7 @@ class RLBalance(AsDictMixin):
         # render as failed. Fall back to the legacy `diff_amount` key for the
         # clamp/filter round-trip.
         diff = RLAmount.from_json(data.get("diff") or data.get("diff_amount"))
-        diff_amount = (
-            diff if diff is not None and diff.number != 0 else None
-        )
+        diff_amount = diff if diff is not None and diff.number != 0 else None
         return cls(
             meta=_parse_meta(data),
             date=_parse_date(data["date"]),
@@ -348,7 +365,9 @@ class RLOpen(AsDictMixin):
     date: datetime.date
     account: str
     currencies: Sequence[str]
-    booking: str | None  # Could be enum: FIFO, LIFO, HIFO, AVERAGE, STRICT, NONE
+    booking: (
+        str | None
+    )  # Could be enum: FIFO, LIFO, HIFO, AVERAGE, STRICT, NONE
 
     @classmethod
     def from_json(cls, data: dict[str, Any]) -> RLOpen:
@@ -418,7 +437,8 @@ class RLEvent(AsDictMixin):
     type: str  # event_type
     description: str
 
-    # Fava's Event ABC expects 'account' property but events don't have accounts
+    # Fava's Event ABC expects an 'account' property, but events have no
+    # accounts
     # This is a quirk in Fava's ABC definition
     @property
     def account(self) -> str:
@@ -572,7 +592,9 @@ class RLCustomValue:
         return str(self.value)
 
     @classmethod
-    def from_raw(cls, raw_value: Any) -> RLCustomValue:
+    def from_raw(  # noqa: PLR0911, PLR0912 - typed-value dispatch switch
+        cls, raw_value: Any
+    ) -> RLCustomValue:
         """Create from raw value, parsing different value types.
 
         Rustledger outputs custom directive values as typed objects. The
@@ -582,7 +604,8 @@ class RLCustomValue:
         - {"type": "int", "value": "10"} -> Decimal('10')
         - {"type": "number", "value": "10.5"} -> Decimal('10.5')
         - {"type": "bool", "value": true} -> bool
-        - {"type": "amount", "value": {"number": "20.00", "currency": "EUR"}} -> RLAmount
+        - {"type": "amount", "value": {"number": "20.00", "currency":
+          "EUR"}} -> RLAmount
         - {"type": "account", "value": "Expenses:Books"} -> string (account)
         - {"type": "currency", "value": "USD"} -> string (currency)
         - {"type": "date", "value": "2024-01-01"} -> datetime.date
@@ -609,14 +632,18 @@ class RLCustomValue:
                 # Or pre-parsed string "20.00 EUR"
                 parts = str(val).split()
                 if len(parts) == 2:
-                    return cls(RLAmount(number=Decimal(parts[0]), currency=parts[1]))
+                    return cls(
+                        RLAmount(number=Decimal(parts[0]), currency=parts[1])
+                    )
                 return cls(val)
             if val_type in {"account", "currency"}:
                 return cls(val, dtype=str)
             if val_type == "date":
                 if val is None:
                     return cls(None, dtype=datetime.date)
-                return cls(datetime.date.fromisoformat(str(val)), dtype=datetime.date)
+                return cls(
+                    datetime.date.fromisoformat(str(val)), dtype=datetime.date
+                )
             # Unknown type, return as-is
             return cls(val)
 
@@ -625,8 +652,8 @@ class RLCustomValue:
             # Already typed (e.g., int, Decimal)
             return cls(raw_value)
 
-        # Try to parse as Amount (number + currency)
-        # Format: "20.00 EUR" or "-100.50 USD"
+        # Try to parse as an Amount: a number followed by a currency,
+        # separated by whitespace
         parts = raw_value.split()
         if len(parts) == 2:
             try:
@@ -635,7 +662,7 @@ class RLCustomValue:
                 # Verify currency looks like a currency (uppercase letters)
                 if currency.isalpha() and currency.isupper():
                     return cls(RLAmount(number=number, currency=currency))
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001, S110 - not an amount; fall through
                 pass
 
         # Keep strings as strings - don't try to convert to numbers
@@ -657,7 +684,8 @@ class RLCustom(AsDictMixin):
     @classmethod
     def from_json(cls, data: dict[str, Any]) -> RLCustom:
         """Create from JSON dict."""
-        # Wrap values to match beancount's interface where values[i].value exists
+        # Wrap values to match beancount's interface where
+        # values[i].value exists
         raw_values = data.get("values", [])
         wrapped_values = tuple(RLCustomValue.from_raw(v) for v in raw_values)
         return cls(
@@ -759,7 +787,9 @@ def _posting_to_json(posting: RLPosting) -> dict[str, Any]:
     return result
 
 
-def directive_to_json(directive: abc.Directive) -> dict[str, Any]:
+def directive_to_json(  # noqa: PLR0912, PLR0915 - per-directive-type serializer
+    directive: abc.Directive,
+) -> dict[str, Any]:
     """Convert a directive to JSON dict for rustledger.
 
     Args:
@@ -795,7 +825,9 @@ def directive_to_json(directive: abc.Directive) -> dict[str, Any]:
         result["narration"] = getattr(directive, "narration", "")
         result["tags"] = list(getattr(directive, "tags", []))
         result["links"] = list(getattr(directive, "links", []))
-        result["postings"] = [_posting_to_json(p) for p in getattr(directive, "postings", [])]
+        result["postings"] = [
+            _posting_to_json(p) for p in getattr(directive, "postings", [])
+        ]
 
     elif type_name == "balance":
         result["account"] = getattr(directive, "account", "")
@@ -856,13 +888,17 @@ def directive_to_json(directive: abc.Directive) -> dict[str, Any]:
                 # Convert RLCustomValue to rustledger's typed format
                 if v.dtype == str:
                     values.append({"type": "string", "value": str(v.value)})
-                elif hasattr(v.value, "number") and hasattr(v.value, "currency"):
+                elif hasattr(v.value, "number") and hasattr(
+                    v.value, "currency"
+                ):
                     # Amount type
-                    values.append({
-                        "type": "amount",
-                        "number": str(v.value.number),
-                        "currency": v.value.currency,
-                    })
+                    values.append(
+                        {
+                            "type": "amount",
+                            "number": str(v.value.number),
+                            "currency": v.value.currency,
+                        }
+                    )
                 else:
                     values.append({"type": "string", "value": str(v.value)})
             elif hasattr(v, "_asdict"):
@@ -874,6 +910,8 @@ def directive_to_json(directive: abc.Directive) -> dict[str, Any]:
     return result
 
 
-def directives_to_json(directives: list[abc.Directive]) -> list[dict[str, Any]]:
+def directives_to_json(
+    directives: list[abc.Directive],
+) -> list[dict[str, Any]]:
     """Convert a list of directives to JSON dicts for rustledger."""
     return [directive_to_json(d) for d in directives]

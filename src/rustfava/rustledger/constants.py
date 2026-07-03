@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from enum import Enum
 
-
 # Account type sentinel - used in Custom entries to identify account values
 # This matches beancount's '<AccountDummy>' sentinel
 ACCOUNT_TYPE = "<AccountDummy>"

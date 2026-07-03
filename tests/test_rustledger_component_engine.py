@@ -52,7 +52,7 @@ SRC = (
 
 
 def test_version(engine: RustledgerComponentEngine) -> None:
-    assert engine.version() == "3.2"
+    assert engine.version() == "3.3"
 
 
 def test_load_marshals_typed_directives(
@@ -181,10 +181,10 @@ def test_clamp_entries_round_trips_directives(
     assert coffee["tags"] == ["tag"]
     assert coffee["links"] == ["link"]
     cost = coffee["postings"][0]["cost"]
-    # Cost number is `kind`-tagged (matching the JSON-RPC surface, which Fava's
-    # `cost_number_values` reads); emitting the generic `type` here silently
-    # drops the cost basis downstream.
-    assert cost["number"] == {"kind": "per_unit", "value": "2"}
+    # Cost number is `type`-tagged with a `value` payload since v0.20
+    # (WIT 3.3) — `cost_number_values` reads this shape (and tolerates the
+    # older `kind`-tagged / field-spread forms).
+    assert cost["number"] == {"type": "per_unit", "value": "2"}
     assert cost["currency"] == "USD"
 
     # Output still parses through the real downstream directive parser.
@@ -212,7 +212,7 @@ def test_clamp_entries_via_directives_to_json_preserves_cost(
     ]
     coffee = next(e for e in clamped if e.get("narration") == "Coffee")
     assert coffee["postings"][0]["cost"]["number"] == {
-        "kind": "per_unit",
+        "type": "per_unit",
         "value": "2",
     }
     assert coffee["meta"]["category"] == "groceries"
@@ -339,7 +339,7 @@ def test_open_session_runs_query_filter_clamp(
     clamped = session.clamp(_CLAMP_BEGIN, _CLAMP_END)
     coffee = next(e for e in clamped if e.get("narration") == "Coffee")
     assert coffee["postings"][0]["cost"]["number"] == {
-        "kind": "per_unit",
+        "type": "per_unit",
         "value": "2",
     }
 

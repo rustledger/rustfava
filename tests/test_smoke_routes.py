@@ -68,14 +68,14 @@ _FRONTEND_REPORTS = (
     Path(__file__).parent.parent / "frontend" / "src" / "reports"
 )
 
-# Engine shortfalls this suite found on first run, tracked upstream: typed
-# scalar functions (only, abs, ...) type-error on NULL instead of propagating
-# it like beanquery — https://github.com/rustledger/rustledger/issues/1699.
-# Matched against the error BODY so a query is only excused for the known
-# engine gap on the ledgers that trigger it, and stays fully tested
-# everywhere else. Remove entries when the engine fix ships.
+# Engine shortfalls tracked upstream: abs() (and possibly other typed scalar
+# functions) type-error on NULL instead of propagating it like beanquery —
+# https://github.com/rustledger/rustledger/issues/1699 (only() was fixed in
+# v0.20.0; abs() still errors as of v0.20.1). Matched against the error BODY
+# so queries are only excused for the known gap on the ledgers that trigger
+# it. Remove entries when the engine fix ships — the guard test below
+# enforces removal.
 KNOWN_ENGINE_GAPS = [
-    "ONLY: first argument must be a currency string",
     "ABS expects a number",
 ]
 
@@ -180,19 +180,19 @@ def test_all_frontend_queries_execute(
 
 
 def test_known_engine_gaps_are_still_present(test_client: FlaskClient) -> None:
-    """The gap list must shrink, not rot: when rustledger#1699 ships, the
-    fixed marker must be removed so the affected queries are asserted again."""
+    """The gap list must shrink, not rot: when the engine fix ships, the
+    fixed marker must be removed so the affected queries are asserted again.
+    The errors-corpus ledger is the trigger for the abs()-on-NULL gap."""
+    assert KNOWN_ENGINE_GAPS, "gap list is empty - delete this test too"
     hit: set[str] = set()
     for query in _frontend_queries():
         response = test_client.get(
-            "/example/api/query", query_string={"query_string": query}
+            "/errors/api/query", query_string={"query_string": query}
         )
         if response.status_code != 200:
             body = response.get_data(as_text=True)
             hit.update(m for m in KNOWN_ENGINE_GAPS if m in body)
     for marker in KNOWN_ENGINE_GAPS:
-        if marker == "ABS expects a number":
-            continue  # only triggered by the errors ledger, checked implicitly
         assert marker in hit, (
             f"engine gap {marker!r} appears FIXED - remove it from "
             "KNOWN_ENGINE_GAPS so the affected queries are asserted again"

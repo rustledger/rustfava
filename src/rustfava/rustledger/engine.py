@@ -22,7 +22,7 @@ SUPPORTED_API_MAJOR = 3
 # Rustledger release this build is pinned to. The component wasm
 # (``rustledger-ffi-component-<version>.wasm``) is downloaded lazily from this
 # release by ``component_engine``. Bumped by ``update-rustledger.yml``.
-RUSTLEDGER_VERSION = "v0.19.1"
+RUSTLEDGER_VERSION = "v0.20.1"
 
 
 class RustledgerError(Exception):
