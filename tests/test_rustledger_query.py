@@ -13,9 +13,15 @@ from decimal import Decimal
 from typing import cast
 from typing import TYPE_CHECKING
 
+import pytest
+
 from rustfava.beans import create
 from rustfava.rustledger.query import _convert_row_value
 from rustfava.rustledger.query import _entries_to_source
+from rustfava.rustledger.query import CompilationError
+from rustfava.rustledger.query import connect
+from rustfava.rustledger.query import ParseError
+from rustfava.rustledger.query import RLCursor
 from rustfava.rustledger.types import RLCustom
 from rustfava.rustledger.types import RLCustomValue
 from rustfava.rustledger.types import RLOpen
@@ -24,9 +30,13 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from rustfava.beans.abc import Directive
+    from rustfava.beans.types import BeancountOptions
+    from rustfava.rustledger.query import RLConnection
 
 
-def test_entries_to_source_preserves_transaction_tags_links_and_metadata() -> None:
+def test_entries_to_source_preserves_transaction_tags_links_and_metadata() -> (
+    None
+):
     postings = [
         create.posting(
             "Assets:US:Bank",
@@ -71,7 +81,9 @@ def test_entries_to_source_preserves_cost_basis() -> None:
         create.posting(
             "Assets:US:Brokerage",
             "10 AAPL",
-            cost=create.cost(Decimal("170.50"), "USD", datetime.date(2024, 3, 20)),
+            cost=create.cost(
+                Decimal("170.50"), "USD", datetime.date(2024, 3, 20)
+            ),
         ),
         create.posting("Assets:US:Bank", "-1705.00 USD"),
     ]
@@ -114,7 +126,8 @@ def test_entries_to_source_preserves_open_booking_method() -> None:
         booking="STRICT",
     )
 
-    # rustledger ``RL*`` directives are a parallel hierarchy to ``abc.Directive``
+    # rustledger ``RL*`` directives are a parallel hierarchy to
+    # ``abc.Directive``
     # that ``_entries_to_source``/``to_string`` accept via singledispatch
     # duck-typing; cast to satisfy the static signature.
     source = _entries_to_source(cast("Sequence[Directive]", [opn]))
@@ -130,7 +143,10 @@ def test_entries_to_source_skips_fava_custom_directives() -> None:
         meta={},
         date=datetime.date(2024, 1, 1),
         type="fava-option",
-        values=(RLCustomValue("title", dtype=str), RLCustomValue("Test", dtype=str)),
+        values=(
+            RLCustomValue("title", dtype=str),
+            RLCustomValue("Test", dtype=str),
+        ),
     )
     other_custom = RLCustom(
         meta={},
@@ -165,7 +181,7 @@ def test_inventory_sums_same_currency_cost_lots() -> None:
         ]
     }
 
-    assert _convert_row_value(value, _INVENTORY_COL) == {"ITOT": Decimal("5")}
+    assert _convert_row_value(value, _INVENTORY_COL) == {"ITOT": Decimal(5)}
 
 
 def test_inventory_mixed_currencies_and_lots() -> None:
@@ -178,6 +194,155 @@ def test_inventory_mixed_currencies_and_lots() -> None:
     }
 
     assert _convert_row_value(value, _INVENTORY_COL) == {
-        "ITOT": Decimal("5"),
+        "ITOT": Decimal(5),
         "USD": Decimal("100.00"),
     }
+
+
+# -- cursor / conversion / connection unit coverage ---------------------------
+
+_AMOUNT_COL = {"name": "market_value", "datatype": "Amount"}
+
+
+def test_amount_column_with_inventory_shaped_payload() -> None:
+    """The engine sometimes declares Amount but ships an Inventory payload
+    (rustledger#1701, found by the route-smoke suite): marshalling must
+    flatten it rather than crash the whole query with a KeyError."""
+    value = {"positions": [{"units": {"currency": "USD", "number": "0"}}]}
+    assert _convert_row_value(value, _AMOUNT_COL) == {"USD": Decimal(0)}
+
+
+def test_convert_row_value_scalars_and_fallbacks() -> None:
+    assert _convert_row_value(None, _AMOUNT_COL) is None
+    decimal_col = {"name": "n", "datatype": "Decimal"}
+    assert _convert_row_value("3.14", decimal_col) == Decimal("3.14")
+    set_col = {"name": "tags", "datatype": "set"}
+    assert _convert_row_value(["a", "b"], set_col) == frozenset({"a", "b"})
+    unknown_col = {"name": "x", "datatype": "something-new"}
+    assert _convert_row_value("as-is", unknown_col) == "as-is"
+
+
+def test_cursor_description_fetch_and_unpack() -> None:
+    cursor = RLCursor(
+        columns=[
+            {"name": "account", "datatype": "str"},
+            {"name": "total", "datatype": "Decimal"},
+        ],
+        rows=[["Assets:Cash", "1.00"], ["Equity:Open", "-1.00"]],
+    )
+    name, datatype = cursor.description[1]
+    assert (name, datatype) == ("total", Decimal)
+    assert cursor.fetchone() == ("Assets:Cash", Decimal("1.00"))
+    assert cursor.fetchone() == ("Equity:Open", Decimal("-1.00"))
+    assert cursor.fetchone() is None
+    assert cursor.fetchall() == []
+
+
+class _ComponentStyleEngine:
+    """Engine stub exposing the component's ``query_entries``."""
+
+    def __init__(self, result: dict[str, object]) -> None:
+        self.result = result
+        self.queries: list[str] = []
+
+    def query_entries(
+        self, _directives_json: str, query: str
+    ) -> dict[str, object]:
+        self.queries.append(query)
+        return self.result
+
+
+class _LegacyStyleEngine:
+    """Engine stub with only the legacy source-text ``query``."""
+
+    def __init__(self, result: dict[str, object]) -> None:
+        self.result = result
+        self.sources: list[str] = []
+
+    def query(self, source: str, _query: str) -> dict[str, object]:
+        self.sources.append(source)
+        return self.result
+
+
+def _connection(engine: object) -> RLConnection:
+    options = cast("BeancountOptions", {})
+    conn = connect("beancount:", [], [], options)
+    conn._engine = engine
+    return conn
+
+
+def test_execute_via_component_engine() -> None:
+    engine = _ComponentStyleEngine(
+        {"columns": [{"name": "account", "datatype": "str"}], "rows": [["A"]]}
+    )
+    cursor = _connection(engine).execute("SELECT account")
+    assert cursor.fetchall() == [("A",)]
+    assert engine.queries == ["SELECT account"]
+
+
+def test_execute_via_legacy_engine_serialises_entries_once() -> None:
+    engine = _LegacyStyleEngine({"columns": [], "rows": []})
+    conn = _connection(engine)
+    conn.execute("SELECT account")
+    conn.execute("SELECT account")
+    assert engine.sources == ["", ""]  # no entries -> empty source, reused
+
+
+def test_execute_via_legacy_engine_honours_set_source() -> None:
+    engine = _LegacyStyleEngine({"columns": [], "rows": []})
+    conn = _connection(engine)
+    conn.set_source("2020-01-01 open Assets:Cash\n")
+    conn.execute("SELECT account")
+    assert engine.sources == ["2020-01-01 open Assets:Cash\n"]
+
+
+def test_execute_raises_parse_and_compilation_errors() -> None:
+    parse_engine = _ComponentStyleEngine(
+        {"errors": [{"message": "cannot parse query"}]}
+    )
+    with pytest.raises(ParseError):
+        _connection(parse_engine).execute("SELEKT")
+    compile_engine = _ComponentStyleEngine(
+        {"errors": [{"message": "column 'x' not found"}]}
+    )
+    with pytest.raises(CompilationError):
+        _connection(compile_engine).execute("SELECT x")
+    empty_message_engine = _ComponentStyleEngine({"errors": [{}]})
+    with pytest.raises(CompilationError, match="Unknown error"):
+        _connection(empty_message_engine).execute("SELECT x")
+
+
+def test_cursor_is_iterable() -> None:
+    cursor = RLCursor(
+        columns=[{"name": "account", "datatype": "str"}], rows=[["A"], ["B"]]
+    )
+    assert list(cursor) == [("A",), ("B",)]
+
+
+def test_inventory_position_without_currency_is_skipped() -> None:
+    value = {
+        "positions": [
+            {"units": {"number": "1"}},
+            {"units": {"currency": "USD", "number": "2"}},
+        ]
+    }
+    assert _convert_row_value(value, _INVENTORY_COL) == {"USD": Decimal(2)}
+
+
+def test_entries_to_source_skips_entries_that_render_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "rustfava.rustledger.query.to_string", lambda _entry: ""
+    )
+    entry = create.transaction(
+        meta={},
+        date=datetime.date(2020, 1, 1),
+        flag="*",
+        payee=None,
+        narration="x",
+        tags=frozenset(),
+        links=frozenset(),
+        postings=[],
+    )
+    assert _entries_to_source([entry]) == ""

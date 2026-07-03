@@ -113,6 +113,32 @@ def _datatype_from_string(datatype: str) -> type:
     return _DATATYPE_MAP.get(datatype, object)
 
 
+def _positions_to_currency_map(value: dict[str, Any]) -> dict[str, Decimal]:
+    """Flatten an Inventory payload to a units-summed ``{currency: Decimal}``.
+
+    Inventory comes as ``{"positions": [{"units": {"number": ..., "currency":
+    ...}}]}``. The FFI payload carries units only -- no per-position cost
+    basis -- so this form is the complete information available for an
+    inventory column. Cost basis / market value are exposed separately via
+    the COST()/VALUE() BQL functions. Preserving cost lots here would require
+    the engine to emit cost per position first; see rustledger/rustfava#155.
+
+    Sums across lots: an inventory may hold several positions of the same
+    currency at different cost bases; flattening must accumulate, not
+    overwrite, or all but one lot is lost.
+    """
+    result: dict[str, Decimal] = {}
+    for pos in value.get("positions", []):
+        units = pos.get("units", {})
+        currency = units.get("currency", "")
+        number = units.get("number", "0")
+        if currency:
+            result[currency] = result.get(currency, Decimal(0)) + Decimal(
+                number
+            )
+    return result
+
+
 def _convert_row_value(value: Any, column: dict[str, str]) -> Any:
     """Convert a row value based on column type."""
     if value is None:
@@ -123,32 +149,21 @@ def _convert_row_value(value: Any, column: dict[str, str]) -> Any:
     if datatype == "Decimal" and isinstance(value, str):
         return Decimal(value)
     if datatype == "Amount" and isinstance(value, dict):
-        return RLAmount.from_json(value)
+        # The engine sometimes declares Amount but ships an Inventory-shaped
+        # payload ({"positions": [...]}) — e.g. value(sum(position)) when the
+        # result is an inventory (rustledger#1701). Shape-sniff instead of
+        # trusting the declared type: crashing row marshalling turns one odd
+        # cell into an HTTP 500 for the whole query (found by the route-smoke
+        # suite on long-example).
+        return (
+            _positions_to_currency_map(value)
+            if "positions" in value and "number" not in value
+            else RLAmount.from_json(value)
+        )
     if datatype == "set" and isinstance(value, list):
         return frozenset(value)
     if datatype == "Inventory" and isinstance(value, dict):
-        # Inventory comes as {"positions": [{"units": {"number": "...", "currency": "..."}}]}
-        # The FFI payload carries units only -- no per-position cost basis -- so
-        # this units-summed {currency: Decimal} form is the complete information
-        # available for an inventory column. Cost basis / market value are
-        # exposed separately via the COST()/VALUE() BQL functions (which return
-        # scalar amounts). Preserving cost lots here would require the engine to
-        # emit cost per position first; see rustledger/rustfava#155.
-        positions = value.get("positions", [])
-        result: dict[str, Decimal] = {}
-        for pos in positions:
-            units = pos.get("units", {})
-            currency = units.get("currency", "")
-            number = units.get("number", "0")
-            if currency:
-                # Sum across lots: an inventory may hold several positions of
-                # the same currency at different cost bases (now that the
-                # serializer preserves cost). Flattening to {currency: number}
-                # must accumulate, not overwrite, or all but one lot is lost.
-                result[currency] = result.get(currency, Decimal(0)) + Decimal(
-                    number
-                )
-        return result
+        return _positions_to_currency_map(value)
 
     return value
 
@@ -166,9 +181,9 @@ class CompilationError(RLQueryError):
 
 
 def connect(
-    connection_string: str,
+    connection_string: str,  # noqa: ARG001 - beanquery-interface compat
     entries: Sequence[Directive],
-    errors: Sequence[BeancountError],
+    errors: Sequence[BeancountError],  # noqa: ARG001 - ignored, per docstring
     options: BeancountOptions,
 ) -> RLConnection:
     """Create a connection for running queries.
@@ -209,8 +224,8 @@ class RLConnection:
     def set_source(self, source: str) -> None:
         """Set the source for queries.
 
-        Since rustledger queries operate on source text (not serialized entries),
-        we need the original source.
+        Since rustledger queries operate on source text (not serialized
+        entries), we need the original source.
         """
         self._source = source
 
@@ -237,7 +252,8 @@ class RLConnection:
             )
         else:
             if self._source is None:
-                # JSON-RPC engine queries source text; re-serialize the entries.
+                # JSON-RPC engine queries source text; re-serialize
+                # the entries.
                 self._source = _entries_to_source(self._entries)
             result = self._engine.query(self._source, query_string)
 
