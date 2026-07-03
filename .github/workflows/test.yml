@@ -48,6 +48,21 @@ jobs:
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
       - name: Install wasmtime
         uses: bytecodealliance/actions/wasmtime/setup@v1
+      - name: Provision rustledger component WASM
+        shell: bash
+        # The component is gitignored (downloaded lazily at runtime), so CI
+        # checkouts lack it and every component-gated test silently skipped
+        # (the availability gate is evaluated at import time, before the
+        # lazy download can happen). Provision the pinned release asset so
+        # the component suite actually runs — and coverage of
+        # component_engine.py (now inside the 100% gate) is complete.
+        run: |
+          TAG=$(grep -oE 'RUSTLEDGER_VERSION = "v[0-9.]+"' src/rustfava/rustledger/engine.py | grep -oE 'v[0-9.]+')
+          gh release download "$TAG" --repo rustledger/rustledger \
+            --pattern "rustledger-ffi-component-*.wasm" \
+            --output src/rustfava/rustledger/rustledger_ffi_component.wasm
+        env:
+          GH_TOKEN: ${{ github.token }}
       - run: touch src/rustfava/static/app.js
       - run: just test-py
 
@@ -68,6 +83,21 @@ jobs:
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
       - name: Install wasmtime
         uses: bytecodealliance/actions/wasmtime/setup@v1
+      - name: Provision rustledger component WASM
+        shell: bash
+        # The component is gitignored (downloaded lazily at runtime), so CI
+        # checkouts lack it and every component-gated test silently skipped
+        # (the availability gate is evaluated at import time, before the
+        # lazy download can happen). Provision the pinned release asset so
+        # the component suite actually runs — and coverage of
+        # component_engine.py (now inside the 100% gate) is complete.
+        run: |
+          TAG=$(grep -oE 'RUSTLEDGER_VERSION = "v[0-9.]+"' src/rustfava/rustledger/engine.py | grep -oE 'v[0-9.]+')
+          gh release download "$TAG" --repo rustledger/rustledger \
+            --pattern "rustledger-ffi-component-*.wasm" \
+            --output src/rustfava/rustledger/rustledger_ffi_component.wasm
+        env:
+          GH_TOKEN: ${{ github.token }}
       - run: touch src/rustfava/static/app.js
       - run: just test-py-typeguard
 

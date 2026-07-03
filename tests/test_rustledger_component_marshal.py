@@ -297,8 +297,14 @@ def test_rewrite_guest_paths_edge_shapes() -> None:
         ],
     }
     RustledgerComponentEngine._rewrite_guest_paths(result, Path("/host"))
-    assert result["entries"][0]["meta"]["filename"] == "/host/main.beancount"
-    assert result["includes"][0]["path"] == "/host/inc.beancount"
+    # expected paths via the same Path arithmetic the code uses, so the
+    # assertion holds on Windows (backslash separators) too
+    assert result["entries"][0]["meta"]["filename"] == str(
+        Path("/host") / "main.beancount"
+    )
+    assert result["includes"][0]["path"] == str(
+        Path("/host") / "inc.beancount"
+    )
     assert result["includes"][1] == {"other": "shape"}
 
 
