@@ -56,7 +56,7 @@ from rustfava.rustledger.engine import RustledgerError
 # IDs embed the full WIT package version (independent of the rustledger release
 # version), so a WIT bump means updating ``_WIT_VERSION`` here — a mismatch
 # makes ``get_export_index`` return ``None`` and every call fail.
-_WIT_VERSION = "3.2.0"
+_WIT_VERSION = "3.3.0"
 _LEDGER = f"rustledger:ledger/ledger@{_WIT_VERSION}"
 _BUILDER = f"rustledger:ledger/builder@{_WIT_VERSION}"
 _UTIL = f"rustledger:ledger/util@{_WIT_VERSION}"
