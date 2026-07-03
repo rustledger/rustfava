@@ -193,15 +193,6 @@ omit = [
     "src/rustfava/_version.py",
     "src/rustfava/beans/types.py",
     "src/rustfava/ext/auto_commit.py",
-    # Rustledger integration - new code with many error handling paths.
-    # Being burned down file by file: query.py and component_engine.py are
-    # now measured; the rest remain exempt.
-    "src/rustfava/rustledger/__init__.py",
-    "src/rustfava/rustledger/backend.py",
-    "src/rustfava/rustledger/engine.py",
-    "src/rustfava/rustledger/loader.py",
-    "src/rustfava/rustledger/options.py",
-    "src/rustfava/rustledger/types.py",
     "src/rustfava/beans/create.py",
     "src/rustfava/beans/str.py",
     "src/rustfava/beans/abc.py",

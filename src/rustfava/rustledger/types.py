@@ -879,7 +879,9 @@ def directive_to_json(  # noqa: PLR0912, PLR0915 - per-directive-type serializer
         result["name"] = getattr(directive, "name", "")
         result["query_string"] = getattr(directive, "query_string", "")
 
-    elif type_name == "custom":
+    else:
+        # custom — the only remaining member of DIRECTIVE_TYPES (membership
+        # was enforced when type_name was resolved above)
         result["custom_type"] = getattr(directive, "type", "")
         # Custom values need special handling
         values = []

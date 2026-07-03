@@ -93,8 +93,8 @@ def _compute_display_precision(
     # Get most common precision for each currency
     result = {}
     for currency, counts in precision_counts.items():
-        if counts:
-            result[currency] = counts.most_common(1)[0][0]
+        # counts is never empty: the Counter is created on first tracked amount
+        result[currency] = counts.most_common(1)[0][0]
 
     return result
 
