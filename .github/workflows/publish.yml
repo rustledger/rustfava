@@ -66,14 +66,55 @@ jobs:
           path: dist/
           if-no-files-found: error
 
+  # End-user smoke of the BUILT wheel on a clean runner: install it like a
+  # user would (no repo venv, no dev deps), launch against a fixture ledger,
+  # and require real routes. The wheel deliberately ships without the engine
+  # component (runtime path is gitignored), so this also exercises the
+  # first-run component download fallback exactly as an end user hits it
+  # (#243 follow-up: releases previously shipped with zero install-and-run
+  # verification).
+  smoke-wheel:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.14"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist
+          path: dist/
+      - name: Install the wheel like an end user
+        run: pip install dist/*.whl
+      - name: Launch and smoke
+        run: |
+          set -euo pipefail
+          rustfava tests/data/example.beancount --port 5000 &
+          SERVER=$!
+          trap 'kill $SERVER 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            curl -fsS -o /dev/null http://127.0.0.1:5000/ && break
+            [ $i -eq 30 ] && { echo "server never came up"; exit 1; }
+            sleep 2
+          done
+          # A redirect-followed page render AND a real query API round trip.
+          curl -fsSL http://127.0.0.1:5000/ | grep -qi rustfava
+          curl -fsS "http://127.0.0.1:5000/example/api/query?query_string=SELECT%20account%20LIMIT%201" \
+            | grep -q '"rows"'
+          echo "wheel smoke OK"
+
   publish:
     if: github.event_name == 'push' && github.ref_type == 'tag'
-    needs: build
+    needs: [build, smoke-wheel]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
-      id-token: write  # Required for trusted publishing
+      id-token: write # Required for trusted publishing
     environment:
       name: pypi
       url: https://pypi.org/project/rustfava/
@@ -108,7 +149,34 @@ jobs:
       - name: Extract version from tag
         id: version
         run: echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
-      - name: Build and push Docker image
+      - name: Build Docker image (load locally for smoke)
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        with:
+          context: .
+          load: true
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+          tags: |
+            ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}
+            ghcr.io/${{ github.repository }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Smoke the image before pushing
+        run: |
+          set -euo pipefail
+          docker run -d --rm --name smoke -p 5000:5000 \
+            -v "$PWD/tests/data:/data:ro" \
+            "ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}" \
+            /data/example.beancount --host 0.0.0.0 --port 5000
+          trap 'docker rm -f smoke 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            curl -fsS -o /dev/null http://127.0.0.1:5000/ && break
+            [ $i -eq 30 ] && { docker logs smoke; echo "container never came up"; exit 1; }
+            sleep 2
+          done
+          curl -fsSL http://127.0.0.1:5000/ | grep -qi rustfava
+          echo "docker smoke OK"
+      - name: Push the smoked image
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
           context: .
@@ -119,12 +187,48 @@ jobs:
             ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}
             ghcr.io/${{ github.repository }}:latest
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+
+  # Post-publish verification: install from the real index like an end user
+  # (with a propagation-retry window) and require a healthy launch.
+  smoke-pypi:
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.14"
+      - name: Install from PyPI (retry for index propagation)
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          for i in $(seq 1 20); do
+            pip install --no-cache-dir "rustfava==${VERSION}" && exit 0
+            echo "index not propagated yet (attempt $i)"; sleep 30
+          done
+          echo "never propagated"; exit 1
+      - name: Launch and smoke
+        run: |
+          set -euo pipefail
+          rustfava tests/data/example.beancount --port 5000 &
+          SERVER=$!
+          trap 'kill $SERVER 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            curl -fsS -o /dev/null http://127.0.0.1:5000/ && break
+            [ $i -eq 30 ] && { echo "server never came up"; exit 1; }
+            sleep 2
+          done
+          curl -fsSL http://127.0.0.1:5000/ | grep -qi rustfava
+          echo "pypi smoke OK"
 
   # Trigger COPR build for Fedora/RHEL
   copr:
     if: github.event_name == 'push' && github.ref_type == 'tag'
-    needs: publish  # Wait for PyPI publish so source is available
+    needs: publish # Wait for PyPI publish so source is available
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -146,6 +250,8 @@ jobs:
       - name: Trigger SCM build
         run: |
           # Trigger a build using COPR's PyPI integration
+          # No '|| true': a failed TRIGGER should fail the job. (--nowait
+          # still means the COPR build itself is not awaited here.)
           copr-cli build-package robcohen/rustfava \
             --name rustfava \
-            --nowait || true
+            --nowait
