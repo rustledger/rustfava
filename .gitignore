@@ -50,3 +50,8 @@ npm-debug.log
 # Rustledger build artifacts
 /src/rustfava/rustledger/.wasm-version
 /src/rustfava/rustledger/*.wasm
+
+# update-rustledger workflow working files (never commit — #243)
+component.wasm
+component.wasm.sha256
+pr-body.md
