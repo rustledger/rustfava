@@ -209,12 +209,18 @@ jobs:
             if ! kill -0 "$PID" 2>/dev/null; then break; fi
             sleep 1
           done
+          ENGINE=""
+          if [ "$OK" = "1" ]; then
+            # require an engine-backed endpoint too: proves the bundled
+            # wasmtime + component wasm actually load, not just the Flask shell
+            curl -fsS -o /dev/null "http://127.0.0.1:45987/smoke/api/options" && ENGINE=1
+          fi
           kill "$PID" 2>/dev/null || true
-          if [ "$OK" != "1" ]; then
-            echo "::error::frozen sidecar failed to start or serve (the #233 failure class)"
+          if [ "$OK" != "1" ] || [ "$ENGINE" != "1" ]; then
+            echo "::error::frozen sidecar failed to start or serve (the #233 failure class); shell=$OK engine=$ENGINE"
             exit 1
           fi
-          echo "sidecar smoke OK"
+          echo "sidecar smoke OK (shell + engine)"
 
       - name: Upload sidecar artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
