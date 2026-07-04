@@ -324,6 +324,11 @@ def _cost_number_from_json(value: Any) -> Any:
                 return Variant(tag, (str(payload[0]), str(payload[1])))
             # v0.19 spread the pair as per_unit/total fields
             return Variant(tag, (str(value["per_unit"]), str(value["total"])))
+        if tag == "compound":
+            # WIT 3.3 input case (rustledger#1700): `{a # b}` as written —
+            # (per-unit, LUMP-total). Pre-booking surfaces only; booked
+            # egress rewrites to per-unit-from-total (rustfava#234).
+            return Variant(tag, (str(payload[0]), str(payload[1])))
         return Variant(tag, str(payload))
     # A bare scalar (``_cost_to_json``'s flat string) is a per-unit cost.
     return Variant("per-unit", str(value))
