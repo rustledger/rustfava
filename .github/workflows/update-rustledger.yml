@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Rustledger version (e.g., v0.8.5)'
+        description: "Rustledger version (e.g., v0.8.5)"
         required: true
         type: string
 
@@ -153,7 +153,7 @@ jobs:
             cat > pr-body.md <<EOF
           Automated update of rustledger WASM version to ${VERSION}.
 
-          The component's WIT version is unchanged (\`${{ steps.gate.outputs.cur_wit }}\`) and the release notes carry no breaking markers, so this auto-merges once CI passes. The vendored component was refreshed and sha256-verified.
+          The component's WIT version matches the host bindings (\`${{ steps.gate.outputs.cur_wit }}\`) and the release notes carry no breaking markers, so this auto-merges once CI passes. The component was sha256-verified against the release asset.
 
           See [rustledger releases](https://github.com/rustledger/rustledger/releases) for the changelog.
           EOF
@@ -183,6 +183,13 @@ jobs:
           commit-message: "chore: upgrade rustledger to ${{ steps.version.outputs.version }}"
           title: "chore: upgrade rustledger to ${{ steps.version.outputs.version }}"
           body-path: pr-body.md
+          # Only engine.py is an intended repo change. The root component.wasm
+          # / .sha256 / pr-body.md are workflow-run working files; without
+          # this scoping create-pull-request committed them, shipping ~6 MB
+          # of unconsumed sdist weight per release that also went silently
+          # stale on manual bumps (#243).
+          add-paths: |
+            src/rustfava/rustledger/engine.py
           branch: chore/upgrade-rustledger-${{ steps.version.outputs.version }}
           delete-branch: true
           draft: ${{ steps.gate.outputs.needs_review }}
