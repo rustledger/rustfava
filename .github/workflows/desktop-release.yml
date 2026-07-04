@@ -212,8 +212,13 @@ jobs:
           ENGINE=""
           if [ "$OK" = "1" ]; then
             # require an engine-backed endpoint too: proves the bundled
-            # wasmtime + component wasm actually load, not just the Flask shell
-            curl -fsS -o /dev/null "http://127.0.0.1:45987/smoke/api/options" && ENGINE=1
+            # wasmtime + component wasm actually load, not just the Flask
+            # shell. Discover the ledger slug from the / redirect rather than
+            # guessing it (round 3 guessed wrong and 404'd).
+            REDIR=$(curl -s -o /dev/null -w '%{redirect_url}' "http://127.0.0.1:45987/")
+            API=$(printf '%s' "$REDIR" | sed -E 's#[^/]+/?$#api/options#')
+            echo "redirect: $REDIR -> probing: $API"
+            curl -fsS -o /dev/null "$API" && ENGINE=1
           fi
           kill "$PID" 2>/dev/null || true
           if [ "$OK" != "1" ] || [ "$ENGINE" != "1" ]; then
