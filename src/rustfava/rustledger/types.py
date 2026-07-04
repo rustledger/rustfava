@@ -118,8 +118,14 @@ def cost_number_values(
             return Decimal(raw["value"]), None
         if kind == "total":
             return None, Decimal(raw["value"])
-        if kind == "per_unit_from_total":
-            # v0.20 sends the pair as a list; v0.19 spread it as fields
+        if kind in ("per_unit_from_total", "compound"):
+            # Both carry a two-string pair. v0.20 sends it as a list
+            # (v0.19 spread per_unit_from_total as fields). For compound
+            # (WIT 3.3, rustledger#1700, `{a # b}` as written) the second
+            # element is only the LUMP component — the effective per-unit
+            # is (N*a+b)/N, not derivable here; booked egress never
+            # carries compound, so it only shows pre-booking
+            # (rustfava#234).
             pair = (
                 value
                 if isinstance(value, (list, tuple))

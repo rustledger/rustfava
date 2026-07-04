@@ -68,16 +68,13 @@ _FRONTEND_REPORTS = (
     Path(__file__).parent.parent / "frontend" / "src" / "reports"
 )
 
-# Engine shortfalls tracked upstream: abs() (and possibly other typed scalar
-# functions) type-error on NULL instead of propagating it like beanquery —
-# https://github.com/rustledger/rustledger/issues/1699 (only() was fixed in
-# v0.20.0; abs() still errors as of v0.20.1). Matched against the error BODY
-# so queries are only excused for the known gap on the ledgers that trigger
-# it. Remove entries when the engine fix ships — the guard test below
-# enforces removal.
-KNOWN_ENGINE_GAPS = [
-    "ABS expects a number",
-]
+# Engine shortfalls tracked upstream, matched against the error BODY so
+# queries are only excused for a known gap on the ledgers that trigger it.
+# Remove entries when the engine fix ships — the guard test below enforces
+# removal. Currently EMPTY: rustledger#1699 (abs()/typed scalars on NULL)
+# was completed by rustledger#1711, shipped in v0.20.2. The scaffolding
+# stays for the next gap.
+KNOWN_ENGINE_GAPS: list[str] = []
 
 
 def _known_engine_gap(body: str) -> bool:
@@ -179,21 +176,15 @@ def test_all_frontend_queries_execute(
             )
 
 
-def test_known_engine_gaps_are_still_present(test_client: FlaskClient) -> None:
+def test_known_engine_gaps_are_still_present() -> None:
     """The gap list must shrink, not rot: when the engine fix ships, the
     fixed marker must be removed so the affected queries are asserted again.
-    The errors-corpus ledger is the trigger for the abs()-on-NULL gap."""
-    assert KNOWN_ENGINE_GAPS, "gap list is empty - delete this test too"
-    hit: set[str] = set()
-    for query in _frontend_queries():
-        response = test_client.get(
-            "/errors/api/query", query_string={"query_string": query}
-        )
-        if response.status_code != 200:
-            body = response.get_data(as_text=True)
-            hit.update(m for m in KNOWN_ENGINE_GAPS if m in body)
-    for marker in KNOWN_ENGINE_GAPS:
-        assert marker in hit, (
-            f"engine gap {marker!r} appears FIXED - remove it from "
-            "KNOWN_ENGINE_GAPS so the affected queries are asserted again"
-        )
+
+    With the list currently empty this asserts exactly that emptiness (every
+    frontend query must succeed un-excused — the smoke test above covers it);
+    when a new gap is excused, restore the marker-hit assertion from git
+    history (see the pre-v0.20.2 version of this test)."""
+    assert not KNOWN_ENGINE_GAPS, (
+        "a gap entry was added - restore the marker-hit assertion body "
+        "from git history so the entry is guarded against rot"
+    )

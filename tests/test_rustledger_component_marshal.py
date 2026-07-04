@@ -142,6 +142,9 @@ def test_cost_number_from_json_shapes() -> None:
     assert (v.tag, v.payload) == ("per-unit-from-total", ("2", "10"))
     v = ce._cost_number_from_json({"type": "total", "value": "10"})
     assert (v.tag, v.payload) == ("total", "10")
+    # WIT 3.3 compound input case (rustledger#1700, rustfava#234)
+    v = ce._cost_number_from_json({"type": "compound", "value": ["5", "10"]})
+    assert (v.tag, v.payload) == ("compound", ("5", "10"))
     v = ce._cost_number_from_json("3.5")
     assert (v.tag, v.payload) == ("per-unit", "3.5")
 
