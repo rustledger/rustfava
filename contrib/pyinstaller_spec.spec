@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_data_files
+from PyInstaller.utils.hooks import collect_dynamic_libs
 from PyInstaller.utils.hooks import collect_submodules
 
 # Get the project root (parent of contrib/)
@@ -102,9 +103,20 @@ if not version_file.exists():
 if version_file.exists():
     hiddenimports.append("rustfava._version")
 
+# wasmtime loads its engine from a platform dynlib (_libwasmtime.so/.dylib/
+# wasmtime.dll) that PyInstaller does not discover from the import graph;
+# without it the frozen sidecar starts but every engine call 500s (#233's
+# smoke test caught this on all four platforms).
+# NB: explicit patterns — the lib is `_libwasmtime.so` (leading underscore)
+# in a platform subdir, which the default `lib*.so` pattern misses.
+binaries = collect_dynamic_libs(
+    "wasmtime", search_patterns=["*.so", "*.dylib", "*.dll"]
+)
+
 a = Analysis(
     [str(rustfava_dir / "cli.py")],
     pathex=[str(src_dir)],
+    binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
 )

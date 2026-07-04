@@ -108,19 +108,29 @@ jobs:
       - name: Install Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+
       - name: Install Python dependencies
         shell: bash
         # ${{ matrix.py-run }} pins the interpreter arch (see the matrix note);
         # `python -m pip` (not bare pip) so the prefix governs pip too.
+        #
+        # Install the project so the frozen build gets the ACTUAL
+        # dependencies from pyproject.toml. The previous hand-maintained
+        # package list drifted twice (missing simplejson and wasmtime),
+        # shipping a v1.31.0 desktop sidecar that crashed on startup
+        # everywhere (#233).
+        #
+        # Two-step because pip cannot drive this repo's custom build backend
+        # (BackendUnavailable) while uv can: uv builds the pure-Python wheel
+        # natively (arch-independent), then the arch-pinned pip installs the
+        # wheel so DEPENDENCY resolution happens under the target arch
+        # (x86_64 wheels for the Rosetta build).
         run: |
+          uv build --wheel
           ${{ matrix.py-run }} python -m pip install --upgrade pip
-          ${{ matrix.py-run }} python -m pip install pyinstaller
-          # Install runtime dependencies only (no rustfava install needed)
-          ${{ matrix.py-run }} python -m pip install \
-            "Flask>=2.2,<4" "Flask-Babel>=3,<5" "Jinja2>=3,<4" "Werkzeug>=2.2,<4" \
-            "beangulp>=0.1" "cheroot>=8,<12" "click>=7,<9" "markdown2>=2.3.0,<3" \
-            "ply>=3.11" "pydantic>=2.0" "watchfiles>=0.20.0" "beancount>=2,<4" \
-            "Babel>=2.7,<3"
+          ${{ matrix.py-run }} python -m pip install pyinstaller dist/rustfava-*.whl
 
       - name: Build frontend assets
         shell: bash
@@ -180,6 +190,42 @@ jobs:
             echo "::error::Sidecar arch mismatch: expected $EXPECT for ${{ matrix.target }}, got: $(file -b "$BIN")"
             exit 1
           fi
+
+      - name: Smoke test the frozen sidecar
+        shell: bash
+        # Actually RUN the frozen binary against a mini ledger and require an
+        # HTTP response. v1.31.0 shipped a sidecar that crashed on startup
+        # from a missing bundled module on every platform, and nothing in the
+        # pipeline executed the binary to notice (#233). NB: the macOS x64
+        # binary runs under Rosetta here, which is also worth exercising.
+        run: |
+          BIN="dist/${{ matrix.sidecar_name }}"
+          printf '2020-01-01 open Assets:Cash\n2020-01-01 open Equity:Open\n2020-01-02 * "smoke"\n  Assets:Cash  1.00 USD\n  Equity:Open  -1.00 USD\n' > smoke.beancount
+          "$BIN" --port 45987 smoke.beancount &
+          PID=$!
+          OK=""
+          for _ in $(seq 1 60); do
+            if curl -fsS -o /dev/null "http://127.0.0.1:45987/"; then OK=1; break; fi
+            if ! kill -0 "$PID" 2>/dev/null; then break; fi
+            sleep 1
+          done
+          ENGINE=""
+          if [ "$OK" = "1" ]; then
+            # require an engine-backed endpoint too: proves the bundled
+            # wasmtime + component wasm actually load, not just the Flask
+            # shell. Discover the ledger slug from the / redirect rather than
+            # guessing it (round 3 guessed wrong and 404'd).
+            REDIR=$(curl -s -o /dev/null -w '%{redirect_url}' "http://127.0.0.1:45987/")
+            API=$(printf '%s' "$REDIR" | sed -E 's#[^/]+/?$#api/options#')
+            echo "redirect: $REDIR -> probing: $API"
+            curl -fsS -o /dev/null "$API" && ENGINE=1
+          fi
+          kill "$PID" 2>/dev/null || true
+          if [ "$OK" != "1" ] || [ "$ENGINE" != "1" ]; then
+            echo "::error::frozen sidecar failed to start or serve (the #233 failure class); shell=$OK engine=$ENGINE"
+            exit 1
+          fi
+          echo "sidecar smoke OK (shell + engine)"
 
       - name: Upload sidecar artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
