@@ -42,6 +42,21 @@ def test_wasm_path_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
     assert _default_wasm_path() == Path("/somewhere/custom.wasm")
 
 
+def test_wasm_path_without_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The bundled-path fallback must be covered regardless of ambient env.
+
+    rustledger's downstream CI exports ``RUSTLEDGER_COMPONENT_WASM`` for the
+    whole pytest run, which meant this branch never executed there and the
+    100% coverage gate failed on an env quirk rather than a real gap. Delete
+    the variable explicitly so both branches are covered in every
+    environment.
+    """
+    monkeypatch.delenv("RUSTLEDGER_COMPONENT_WASM", raising=False)
+    path = _default_wasm_path()
+    assert path.name == "rustledger_ffi_component.wasm"
+    assert path.parent.name == "rustledger"
+
+
 def test_download_component_writes_file(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
