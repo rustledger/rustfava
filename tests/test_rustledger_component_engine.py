@@ -51,8 +51,18 @@ SRC = (
 )
 
 
+# The MINIMUM contract version this rustfava requires. The component may be
+# NEWER: minor bumps are additive by the WIT versioning policy, and
+# rustledger's downstream CI deliberately runs these tests against
+# unreleased PR components — a hard equality here turned every upstream
+# minor bump into a red downstream job (rustledger#1755's 3.4 bump).
+MIN_API_VERSION = (3, 3)
+
+
 def test_version(engine: RustledgerComponentEngine) -> None:
-    assert engine.version() == "3.3"
+    major, minor = (int(p) for p in engine.version().split("."))
+    assert major == MIN_API_VERSION[0], "major bump = breaking contract change"
+    assert minor >= MIN_API_VERSION[1]
 
 
 def test_load_marshals_typed_directives(
