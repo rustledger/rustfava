@@ -869,6 +869,29 @@ class RustledgerComponentEngine:
         handle = inst.get_func(store, fidx)(store, source)
         return ComponentSession(self, store, inst, handle)
 
+    def open_session_entries(
+        self, entries_json: list[dict[str, Any]]
+    ) -> ComponentSession:
+        """Hold an already-loaded entry set in a session (WIT >= 3.4.0).
+
+        The entries marshal across the wire ONCE here; subsequent
+        ``session.query`` calls run against directives held inside the
+        component with no per-call shuttling — the missing piece that lets
+        fava's FILTERED entry sets (#249) use sessions at all. Raises on
+        components older than 3.4.0 (no ``from-entries`` export); callers
+        gate/fall back (see ``rustfava.rustledger.query.SessionCache``).
+        """
+        self._ensure_version()
+        store, inst = self._instantiate()
+        fidx = self._component.get_export_index(
+            "[static]session.from-entries", self._iface(_LEDGER)
+        )
+        func = inst.get_func(store, fidx)
+        entries_type = func.type(store).params[0][1]
+        wit_entries = _unmarshal(list(entries_json), entries_type)
+        handle = func(store, wit_entries)
+        return ComponentSession(self, store, inst, handle)
+
     def open_session_file(
         self,
         path: str,
