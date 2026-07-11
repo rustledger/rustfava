@@ -368,7 +368,9 @@ class _FakeEngine:
         self.opens = 0
         self._fail = fail
 
-    def open_session_entries(self, _entries_json: list) -> _FakeSession:
+    def open_session_entries(
+        self, _entries_json: list[dict[str, object]]
+    ) -> _FakeSession:
         self.opens += 1
         if self._fail:
             msg = "no from-entries export"
@@ -383,8 +385,8 @@ class _NoSessionEngine:
 def test_session_cache_identity_hit_and_miss() -> None:
     cache = SessionCache()
     engine = _FakeEngine()
-    entries_a: list = []
-    entries_b: list = []
+    entries_a: list[Directive] = []
+    entries_b: list[Directive] = []
     first = cache.get(engine, entries_a)
     assert first is not None
     # Same object: cache hit, no new open.
@@ -404,7 +406,7 @@ def test_session_cache_disabled_without_capability() -> None:
 def test_session_cache_disables_permanently_on_open_failure() -> None:
     cache = SessionCache()
     engine = _FakeEngine(fail=True)
-    entries: list = []
+    entries: list[Directive] = []
     assert cache.get(engine, entries) is None
     # Second call must NOT retry the failing open.
     assert cache.get(engine, entries) is None
@@ -412,7 +414,12 @@ def test_session_cache_disables_permanently_on_open_failure() -> None:
 
 
 def test_connection_prefers_held_session() -> None:
-    conn = connect("rustledger:", entries=[], errors=[], options={})
+    conn = connect(
+        "rustledger:",
+        entries=[],
+        errors=[],
+        options=cast("BeancountOptions", {}),
+    )
     session = _FakeSession()
     conn.set_session(session)
     cursor = conn.execute("SELECT account")
