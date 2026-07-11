@@ -388,3 +388,23 @@ def test_missing_wasm_download_fallback_errors(
     )
     with pytest.raises(RustledgerError, match="wasm32-wasip2"):
         component_engine.RustledgerComponentEngine()
+
+
+# ===== session.from-entries (#249, WIT >= 3.4.0) =====
+
+
+def test_open_session_entries_holds_and_queries(
+    engine: RustledgerComponentEngine,
+) -> None:
+    """A held entry set answers queries identically to query-entries."""
+    entries = engine.load(SRC)["entries"]
+    session = engine.open_session_entries(entries)
+    held = session.query("SELECT account, sum(position) GROUP BY account")
+    shipped = engine.query_entries(
+        entries, "SELECT account, sum(position) GROUP BY account"
+    )
+    assert held["errors"] == []
+    assert held["columns"] == shipped["columns"]
+    assert sorted(map(str, held["rows"])) == sorted(map(str, shipped["rows"]))
+    # The session holds ALL the entries it was given.
+    assert len(session.info()["entries"]) == len(entries)

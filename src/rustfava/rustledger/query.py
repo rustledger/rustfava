@@ -202,6 +202,51 @@ def connect(
     return RLConnection(entries, options)
 
 
+class SessionCache:
+    """One held component session per live entry set (#249).
+
+    fava's query endpoint runs against FILTERED entries; before sessions,
+    every BQL query shipped the full filtered directive list across the
+    wire (``query-entries``) and re-converted it per query. This cache
+    pays that marshaling once per entry set: ``get`` returns a held
+    :class:`ComponentSession` for the SAME entries object (identity — the
+    strong reference kept here guarantees the id stays valid), opening a
+    fresh one when the filter (or the whole ledger, on reload) changes.
+
+    Size one by design: fava views churn between a handful of filter
+    states but query bursts hit one state repeatedly; replacing on change
+    also releases the previous entries list and its session. Engines
+    without ``open_session_entries`` (JSON-RPC) or components without
+    ``from-entries`` (< WIT 3.4.0) disable the cache on first failure and
+    callers fall back to ``query_entries`` permanently.
+    """
+
+    def __init__(self) -> None:
+        """Initialize an empty cache."""
+        self._entries: Sequence[Directive] | None = None
+        self._session: Any = None
+        self._disabled = False
+
+    def get(self, engine: Any, entries: Sequence[Directive]) -> Any:
+        """A held session for ``entries``, or ``None`` when unavailable."""
+        if self._disabled or not hasattr(engine, "open_session_entries"):
+            return None
+        if self._entries is entries:
+            return self._session
+        try:
+            session = engine.open_session_entries(
+                directives_to_json(list(entries))
+            )
+        except Exception:  # noqa: BLE001 — old component, wire error: fall back
+            self._disabled = True
+            self._entries = None
+            self._session = None
+            return None
+        self._entries = entries
+        self._session = session
+        return session
+
+
 class RLConnection:
     """Connection for executing BQL queries against entries.
 
@@ -220,6 +265,11 @@ class RLConnection:
         self._options = options
         self._engine = get_engine()
         self._source: str | None = None
+        self._session: Any = None
+
+    def set_session(self, session: Any) -> None:
+        """Attach a held component session for wire-free queries (#249)."""
+        self._session = session
 
     def set_source(self, source: str) -> None:
         """Set the source for queries.
@@ -243,7 +293,11 @@ class RLConnection:
             CompilationError: If the query cannot be compiled
             RuntimeError: If source is not set
         """
-        if hasattr(self._engine, "query_entries"):
+        if self._session is not None:
+            # Held session (#249): the entries already live inside the
+            # component — no per-query marshaling at all.
+            result = self._session.query(query_string)
+        elif hasattr(self._engine, "query_entries"):
             # Component engine: query the directive set directly via the typed
             # `query-entries`, so there is no re-render of entries to beancount
             # source (which can produce text the parser rejects).

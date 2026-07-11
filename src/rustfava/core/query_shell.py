@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import io
 import shlex
 from decimal import Decimal
 from typing import TYPE_CHECKING
@@ -16,17 +15,19 @@ from rustfava.helpers import RustfavaAPIError
 from rustfava.rustledger.query import CompilationError
 from rustfava.rustledger.query import connect
 from rustfava.rustledger.query import ParseError
-from rustfava.rustledger.query import RLConnection
-from rustfava.rustledger.query import RLCursor
+from rustfava.rustledger.query import SessionCache
 from rustfava.util.excel import HAVE_EXCEL
 from rustfava.util.excel import to_csv
 from rustfava.util.excel import to_excel
 
 if TYPE_CHECKING:  # pragma: no cover
+    import io
     from collections.abc import Sequence
 
     from rustfava.beans.abc import Directive
     from rustfava.core import RustfavaLedger
+    from rustfava.rustledger.query import RLConnection
+    from rustfava.rustledger.query import RLCursor
 
 
 class FavaShellError(RustfavaAPIError):
@@ -75,10 +76,13 @@ class FavaQueryRunner:
 
     def __init__(self, ledger: RustfavaLedger) -> None:
         self.ledger = ledger
+        # Held-session cache (#249): one component session per live entry
+        # set, so repeated queries on the same fava filter state skip the
+        # per-query directive marshaling. Lives here because the shell
+        # persists across requests while connections are per-call.
+        self._session_cache = SessionCache()
 
-    def run(
-        self, entries: Sequence[Directive], query: str
-    ) -> RLCursor | str:
+    def run(self, entries: Sequence[Directive], query: str) -> RLCursor | str:
         """Run a query, returning cursor or text result."""
         # Get the source from the ledger for queries
         source = getattr(self.ledger, "_source", None)
@@ -94,6 +98,10 @@ class FavaQueryRunner:
         if source:
             conn.set_source(source)
 
+        session = self._session_cache.get(conn._engine, entries)  # noqa: SLF001
+        if session is not None:
+            conn.set_session(session)
+
         # Parse the query to handle special commands
         query = query.strip()
         query_lower = query.lower()
@@ -103,11 +111,13 @@ class FavaQueryRunner:
         if query_lower in (".exit", ".quit", "exit", "quit"):
             return noop_doc
 
-        # Handle .run or run command
-        if query_lower.startswith((".run", "run")):
-            # Check if it's just "run" or ".run" (list queries) or "run name"
-            if query_lower in ("run", ".run") or query_lower.startswith(("run ", ".run ")):
-                return self._handle_run(query, conn)
+        # Handle .run or run command: just "run"/".run" (list queries)
+        # or "run name"
+        if query_lower.startswith((".run", "run")) and (
+            query_lower in ("run", ".run")
+            or query_lower.startswith(("run ", ".run "))
+        ):
+            return self._handle_run(query, conn)
 
         # Handle help commands - return text
         if query_lower.startswith((".help", "help")):
@@ -240,7 +250,7 @@ class QueryShell(FavaModule):
         rtypes = res.description
 
         # Convert rows to exportable format
-        rows = _numberify_rows(rrows, rtypes)
+        rows = _numberify_rows(rrows)
 
         if result_format == "csv":
             data = to_csv(list(rtypes), rows)
@@ -254,7 +264,6 @@ class QueryShell(FavaModule):
 
 def _numberify_rows(
     rows: list[tuple[object, ...]],
-    columns: tuple[object, ...],
 ) -> list[tuple[object, ...]]:
     """Convert row values to exportable format.
 
@@ -263,20 +272,23 @@ def _numberify_rows(
     result: list[tuple[object, ...]] = []
     for row in rows:
         new_row: list[object] = []
-        for i, value in enumerate(row):
-            col = columns[i]
+        for value in row:
             # Convert complex types to strings for export
             if hasattr(value, "number") and hasattr(value, "currency"):
                 # Amount-like
                 new_row.append(f"{value.number} {value.currency}")
             elif isinstance(value, dict):
-                # Inventory. The cursor layer (query._convert_row_value) is the
-                # single place that interprets the engine's {"positions": [...]}
-                # payload, flattening it to {currency: Decimal} (summing cost
-                # lots). Render that canonical form here as "<number> <currency>"
-                # parts, matching the Amount case above and comma-joining
-                # multi-currency inventories (sorted for stable output).
-                if value and all(isinstance(v, Decimal) for v in value.values()):
+                # Inventory. The cursor layer
+                # (query._convert_row_value) is the single place that
+                # interprets the engine's {"positions": [...]} payload,
+                # flattening it to {currency: Decimal} (summing cost
+                # lots). Render that canonical form here as
+                # "<number> <currency>" parts, matching the Amount case
+                # above and comma-joining multi-currency inventories
+                # (sorted for stable output).
+                if value and all(
+                    isinstance(v, Decimal) for v in value.values()
+                ):
                     new_row.append(
                         ", ".join(
                             f"{number} {currency}"

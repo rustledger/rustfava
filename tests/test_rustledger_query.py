@@ -22,6 +22,7 @@ from rustfava.rustledger.query import CompilationError
 from rustfava.rustledger.query import connect
 from rustfava.rustledger.query import ParseError
 from rustfava.rustledger.query import RLCursor
+from rustfava.rustledger.query import SessionCache
 from rustfava.rustledger.types import RLCustom
 from rustfava.rustledger.types import RLCustomValue
 from rustfava.rustledger.types import RLOpen
@@ -346,3 +347,74 @@ def test_entries_to_source_skips_entries_that_render_empty(
         postings=[],
     )
     assert _entries_to_source([entry]) == ""
+
+
+# ===== SessionCache (#249) =====
+
+
+class _FakeSession:
+    def __init__(self) -> None:
+        self.queries: list[str] = []
+
+    def query(self, query_string: str) -> dict[str, object]:
+        self.queries.append(query_string)
+        return {"columns": [], "rows": [], "errors": []}
+
+
+class _FakeEngine:
+    """Engine double with open_session_entries; counts opens."""
+
+    def __init__(self, *, fail: bool = False) -> None:
+        self.opens = 0
+        self._fail = fail
+
+    def open_session_entries(self, _entries_json: list) -> _FakeSession:
+        self.opens += 1
+        if self._fail:
+            msg = "no from-entries export"
+            raise RuntimeError(msg)
+        return _FakeSession()
+
+
+class _NoSessionEngine:
+    """Engine double without the capability (JSON-RPC shape)."""
+
+
+def test_session_cache_identity_hit_and_miss() -> None:
+    cache = SessionCache()
+    engine = _FakeEngine()
+    entries_a: list = []
+    entries_b: list = []
+    first = cache.get(engine, entries_a)
+    assert first is not None
+    # Same object: cache hit, no new open.
+    assert cache.get(engine, entries_a) is first
+    assert engine.opens == 1
+    # Different object (filter change / reload): fresh session.
+    second = cache.get(engine, entries_b)
+    assert second is not first
+    assert engine.opens == 2
+
+
+def test_session_cache_disabled_without_capability() -> None:
+    cache = SessionCache()
+    assert cache.get(_NoSessionEngine(), []) is None
+
+
+def test_session_cache_disables_permanently_on_open_failure() -> None:
+    cache = SessionCache()
+    engine = _FakeEngine(fail=True)
+    entries: list = []
+    assert cache.get(engine, entries) is None
+    # Second call must NOT retry the failing open.
+    assert cache.get(engine, entries) is None
+    assert engine.opens == 1
+
+
+def test_connection_prefers_held_session() -> None:
+    conn = connect("rustledger:", entries=[], errors=[], options={})
+    session = _FakeSession()
+    conn.set_session(session)
+    cursor = conn.execute("SELECT account")
+    assert session.queries == ["SELECT account"]
+    assert list(cursor) == []
