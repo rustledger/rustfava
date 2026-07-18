@@ -181,6 +181,66 @@ def test_errors_from_json_source_formats() -> None:
     assert source["filename"] == "main.beancount"
 
 
+def test_display_precision_covers_costs_balances_and_prices() -> None:
+    """Cost amounts, balance amounts, and price-directive amounts all feed
+    the precision counts, and repeat observations of a currency accumulate.
+
+    Engines shipping ``display_precision`` (rustledger WIT 3.8+) bypass
+    this fallback entirely, so integration tests no longer reach these
+    arms — they are pinned here directly to keep the fallback correct for
+    engines that predate the field.
+    """
+    precision = _compute_display_precision(
+        [
+            {
+                "type": "transaction",
+                "postings": [
+                    {"units": {"number": "1.25", "currency": "USD"}},
+                    # Second USD observation: accumulates into the existing
+                    # counter rather than creating a new one.
+                    {"units": {"number": "2.5", "currency": "USD"}},
+                    {
+                        "units": {"number": "10", "currency": "GLD"},
+                        "cost": {
+                            "number": {"kind": "per_unit", "value": "1500.12"},
+                            "currency": "USD",
+                        },
+                    },
+                    {
+                        "units": {"number": "1", "currency": "GLD"},
+                        "cost": {
+                            "number": {"kind": "total", "value": "999.1234"},
+                            "currency": "CAD",
+                        },
+                    },
+                    {
+                        "units": {"number": "2", "currency": "GLD"},
+                        # Cost present but without a number: tracked nothing.
+                        "cost": {"currency": "CAD"},
+                    },
+                ],
+            },
+            {
+                "type": "balance",
+                "amount": {"number": "100.500", "currency": "EUR"},
+            },
+            {"type": "price", "amount": {"number": "7.25", "currency": "CHF"}},
+            # Neither transaction nor balance/price: contributes nothing.
+            {"type": "open", "account": "Assets:Cash"},
+        ]
+    )
+    assert precision == {
+        # Mode of {2dp: "1.25", 1dp: "2.5"} plus the 2dp per-unit cost.
+        "USD": 2,
+        "GLD": 0,
+        # The total-shaped cost number feeds the cost currency.
+        "CAD": 4,
+        # Balance and price-directive amounts.
+        "EUR": 3,
+        "CHF": 2,
+    }
+
+
 def test_display_precision_currency_without_samples() -> None:
     """A currency tracked but with no countable precisions is skipped."""
     assert (
@@ -228,6 +288,7 @@ def test_load_uncached_keeps_ffi_display_precision(
 ) -> None:
     """load_uncached has its own copy of the precision workaround; the
     FFI-provided branch is engine-version-gated like load_string's."""
+
     class StubEngine:
         @staticmethod
         def load_full(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
