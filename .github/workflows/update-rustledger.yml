@@ -60,7 +60,7 @@ jobs:
           cp component.wasm src/rustfava/rustledger/rustledger_ffi_component.wasm
 
       - name: Install wasm-tools
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@v2.85.4
         with:
           tool: wasm-tools
 
