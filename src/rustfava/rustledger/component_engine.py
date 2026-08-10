@@ -796,20 +796,54 @@ class RustledgerComponentEngine:
 
     @staticmethod
     def _rewrite_guest_paths(result: dict[str, Any], host_dir: Path) -> None:
-        """Rewrite ``/work/...`` guest paths in a load result to host paths."""
+        """Rewrite ``/work/...`` guest paths in a load result to host paths.
+
+        Three kinds of path cross this boundary, and all three must be mapped:
+
+        1. ``meta.filename`` — where a directive was *written*.
+        2. A ``document`` directive's ``path`` — the file it *points at*. This
+           is a second, independent path, and it is the only one that matters
+           for documents found by discovery rather than written by hand: those
+           are synthesized, so their ``meta.filename`` is ``<unknown>`` and
+           mapping only ``meta`` is a no-op for them. Leaving it guest-side
+           made every auto-discovered document unreachable — ``statement_path``
+           matches a resolved host path against ``Document.filename`` and can
+           never hit, and ``/document/`` then hands ``send_file`` a path that
+           does not exist on the host (rustfava #277).
+        3. Guest paths *embedded in* diagnostic messages, which are rendered in
+           the UI. These are substrings, not whole fields, so they
+           are relocated by prefix rather than parsed out — a document
+           path may contain spaces, so there is no reliable way to find
+           where one ends.
+        """
+        guest_root = "/work/"
 
         def to_host(p: Any) -> Any:
-            if isinstance(p, str) and p.startswith("/work/"):
-                return str(host_dir / p[len("/work/") :])
+            if isinstance(p, str) and p.startswith(guest_root):
+                return str(host_dir / p[len(guest_root) :])
             return p
+
+        def to_host_embedded(s: Any) -> Any:
+            if isinstance(s, str) and guest_root in s:
+                return s.replace(guest_root, f"{host_dir}{os.sep}")
+            return s
 
         for entry in result.get("entries", []):
             meta = entry.get("meta")
             if isinstance(meta, dict) and "filename" in meta:
                 meta["filename"] = to_host(meta["filename"])
+            # `path` is unique to `document-dir` among output directives, but
+            # gate on the type anyway so a future directive that gains a `path`
+            # meaning something other than a host file is not silently
+            # rewritten.
+            if entry.get("type") == "document" and "path" in entry:
+                entry["path"] = to_host(entry["path"])
         for include in result.get("includes", []):
             if isinstance(include, dict) and "path" in include:
                 include["path"] = to_host(include["path"])
+        for error in result.get("errors", []):
+            if isinstance(error, dict) and "message" in error:
+                error["message"] = to_host_embedded(error["message"])
 
     def clamp_entries(
         self,
