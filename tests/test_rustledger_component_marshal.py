@@ -8,6 +8,7 @@ exercise the pure helpers and error/edge branches that the integration tests
 
 from __future__ import annotations
 
+import os
 import urllib.request
 from decimal import Decimal
 from pathlib import Path
@@ -323,6 +324,61 @@ def test_rewrite_guest_paths_edge_shapes() -> None:
         Path("/host") / "inc.beancount"
     )
     assert result["includes"][1] == {"other": "shape"}
+
+
+def test_rewrite_guest_paths_document_payload_and_messages() -> None:
+    """A document's payload path and diagnostic messages are mapped too.
+
+    Regression for #277. ``meta.filename`` is where a directive was *written*;
+    a ``document`` directive's ``path`` is the file it *points at*, and those
+    are independent. Documents found by discovery are synthesized, so they have
+    no source location at all — mapping only ``meta`` is a complete no-op for
+    exactly the entries whose payload path matters, which is why every
+    auto-discovered document was left pointing into the sandbox.
+    """
+    result: dict[str, Any] = {
+        "entries": [
+            # The shape that broke: synthesized by discovery, so
+            # `meta.filename` carries no location, only `path` is real.
+            {
+                "type": "document",
+                "meta": {"filename": "<unknown>"},
+                "path": "/work/docs/Expenses/Foo/2026-07-07 spaced name.pdf",
+            },
+            # A non-document that happens to carry `path` must be left alone.
+            {
+                "type": "custom",
+                "meta": {"filename": "/work/main.beancount"},
+                "path": "/work/not-a-host-file",
+            },
+            {"type": "document", "meta": {}},  # document with no path
+        ],
+        "errors": [
+            {"message": "skipped: /work/docs/Invoices/x y.pdf"},
+            {"message": "nothing to map here"},
+            {"severity": "warning"},  # no message
+        ],
+    }
+    RustledgerComponentEngine._rewrite_guest_paths(result, Path("/host"))
+
+    # Path arithmetic mirrors the implementation so this holds on Windows too.
+    assert result["entries"][0]["path"] == str(
+        Path("/host") / "docs/Expenses/Foo/2026-07-07 spaced name.pdf"
+    )
+    assert result["entries"][1]["meta"]["filename"] == str(
+        Path("/host") / "main.beancount"
+    )
+    # The type gate: `path` is unique to documents today, but a future
+    # directive gaining a `path` that is not a host file must not be rewritten.
+    assert result["entries"][1]["path"] == "/work/not-a-host-file"
+
+    # Messages embed paths mid-string, and a document name may contain spaces,
+    # so the mount prefix is relocated rather than the path parsed out.
+    assert result["errors"][0]["message"] == (
+        f"skipped: {Path('/host')}{os.sep}docs/Invoices/x y.pdf"
+    )
+    assert result["errors"][1]["message"] == "nothing to map here"
+    assert result["errors"][2] == {"severity": "warning"}
 
 
 def test_clamp_accepts_mutated_edge_json(

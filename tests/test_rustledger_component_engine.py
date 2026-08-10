@@ -269,6 +269,44 @@ def test_load_full_returns_host_paths(
     assert not any(f.startswith("/work") for f in filenames)
 
 
+def test_load_full_discovered_document_path_is_on_the_host(
+    engine: RustledgerComponentEngine,
+    tmp_path: Path,
+) -> None:
+    """A document found by discovery points at a file that exists on disk.
+
+    Regression for #277. Discovery synthesizes these entries, so they carry no
+    source location — ``meta.filename`` is ``<unknown>`` — and the only real
+    path on them is the payload ``path``. While that was left as a
+    ``/work/...`` guest path, every auto-discovered document was
+    unreachable: ``/statement/`` matches a resolved host path against
+    ``Document.filename`` and could never
+    hit, and ``/document/`` handed ``send_file`` a path with no host file
+    behind it. Hand-written ``document`` directives were unaffected, which is
+    what hid this — their paths never transit the sandbox.
+
+    The filename deliberately contains a space, because the diagnostic-message
+    rewrite cannot delimit a path by whitespace.
+    """
+    docs = tmp_path / "docs" / "Expenses" / "Foo"
+    docs.mkdir(parents=True)
+    document = docs / "2026-07-07 spaced name.pdf"
+    document.write_text("dummy")
+    main = tmp_path / "main.bean"
+    main.write_text(
+        'option "documents" "docs"\n\n2020-01-01 open Expenses:Foo\n'
+    )
+
+    result = engine.load_full(str(main))
+    documents = [e for e in result["entries"] if e["type"] == "document"]
+    assert len(documents) == 1, "expected discovery to synthesize one document"
+
+    found = documents[0]["path"]
+    assert not found.startswith("/work"), f"guest path leaked: {found}"
+    assert Path(found) == document
+    assert Path(found).exists(), "the mapped path must exist on the host"
+
+
 def test_custom_typed_values_use_jsonrpc_shape(
     engine: RustledgerComponentEngine,
 ) -> None:
