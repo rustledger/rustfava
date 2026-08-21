@@ -60,7 +60,7 @@ jobs:
           TAG=$(grep -oE 'RUSTLEDGER_VERSION = "v[0-9.]+"' src/rustfava/rustledger/engine.py | grep -oE 'v[0-9.]+')
           gh release download "$TAG" --repo rustledger/rustledger \
             --pattern "rustledger-ffi-component-*.wasm" \
-            --output src/rustfava/rustledger/rustledger_ffi_component.wasm
+            --output "src/rustfava/rustledger/rustledger_ffi_component-$TAG.wasm"
         env:
           GH_TOKEN: ${{ github.token }}
       - run: touch src/rustfava/static/app.js
@@ -95,7 +95,7 @@ jobs:
           TAG=$(grep -oE 'RUSTLEDGER_VERSION = "v[0-9.]+"' src/rustfava/rustledger/engine.py | grep -oE 'v[0-9.]+')
           gh release download "$TAG" --repo rustledger/rustledger \
             --pattern "rustledger-ffi-component-*.wasm" \
-            --output src/rustfava/rustledger/rustledger_ffi_component.wasm
+            --output "src/rustfava/rustledger/rustledger_ffi_component-$TAG.wasm"
         env:
           GH_TOKEN: ${{ github.token }}
       - run: touch src/rustfava/static/app.js

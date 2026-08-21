@@ -52,9 +52,14 @@ if translations_dir.exists():
 # Rustledger engine: the in-process WASI Preview 2 component. Bundled when
 # present so the frozen app does not have to download it at first run (the
 # component_engine cache path is read-only inside the PyInstaller bundle).
-wasm_file = rustfava_dir / "rustledger" / "rustledger_ffi_component.wasm"
-if wasm_file.exists():
-    datas.append((str(wasm_file), "rustfava/rustledger"))
+# Globbed rather than named: the filename carries the pinned rustledger
+# version (rustfava#286), and this spec has no reason to know which.
+datas.extend(
+    (str(wasm_file), "rustfava/rustledger")
+    for wasm_file in (rustfava_dir / "rustledger").glob(
+        "rustledger_ffi_component-*.wasm"
+    )
+)
 
 # Help files
 help_dir = rustfava_dir / "help"

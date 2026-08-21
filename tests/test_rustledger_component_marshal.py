@@ -32,7 +32,9 @@ from rustfava.rustledger.component_engine import _download_component_wasm
 from rustfava.rustledger.component_engine import _drop_none
 from rustfava.rustledger.component_engine import _finalize_query_result
 from rustfava.rustledger.component_engine import _meta_value_json
+from rustfava.rustledger.component_engine import _prune_superseded_components
 from rustfava.rustledger.component_engine import _unwrap_query_value
+from rustfava.rustledger.component_engine import RUSTLEDGER_VERSION
 from rustfava.rustledger.component_engine import RustledgerComponentEngine
 from rustfava.rustledger.constants import Missing
 from rustfava.rustledger.engine import RustledgerError
@@ -54,7 +56,7 @@ def test_wasm_path_without_override(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     monkeypatch.delenv("RUSTLEDGER_COMPONENT_WASM", raising=False)
     path = _default_wasm_path()
-    assert path.name == "rustledger_ffi_component.wasm"
+    assert path.name == f"rustledger_ffi_component-{RUSTLEDGER_VERSION}.wasm"
     assert path.parent.name == "rustledger"
 
 
@@ -489,3 +491,44 @@ def test_missing_sentinel_is_falsy_singleton() -> None:
     assert Missing() is Missing()
     assert repr(Missing()) == "MISSING"
     assert not Missing()
+
+
+def test_prune_superseded_components(tmp_path: Path) -> None:
+    """Only the current component survives; older ones and the legacy name go.
+
+    The filename carries the pinned version (rustfava#286), so without this
+    every upgrade would leave another ~7 MB artifact behind forever.
+    """
+    current = tmp_path / f"rustledger_ffi_component-{RUSTLEDGER_VERSION}.wasm"
+    older = tmp_path / "rustledger_ffi_component-v0.0.1.wasm"
+    legacy = tmp_path / "rustledger_ffi_component.wasm"
+    unrelated = tmp_path / "keep-me.wasm"
+    for f in (current, older, legacy, unrelated):
+        f.write_bytes(b"\0asm")
+
+    _prune_superseded_components(current)
+
+    assert current.exists()
+    assert unrelated.exists()
+    assert not older.exists()
+    assert not legacy.exists()
+
+
+def test_prune_superseded_components_tolerates_unremovable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A file that cannot be deleted must not break a working engine."""
+    current = tmp_path / f"rustledger_ffi_component-{RUSTLEDGER_VERSION}.wasm"
+    older = tmp_path / "rustledger_ffi_component-v0.0.1.wasm"
+    for f in (current, older):
+        f.write_bytes(b"\0asm")
+
+    denied = "permission denied"
+
+    def _boom(_self: Path, **_kwargs: object) -> None:
+        raise OSError(denied)
+
+    monkeypatch.setattr(Path, "unlink", _boom)
+    _prune_superseded_components(current)  # must not raise
+
+    assert older.exists()
