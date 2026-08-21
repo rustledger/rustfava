@@ -32,13 +32,29 @@ jobs:
 
       - name: Get version
         id: version
+        # Values arrive through `env:` rather than `${{ }}`, which is pasted
+        # into the script text before bash parses it. `client_payload.version`
+        # comes from a repository_dispatch payload, so interpolating it
+        # directly is the standard script-injection shape (same class as the
+        # PR-body bug fixed in #289).
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          PAYLOAD_VERSION: ${{ github.event.client_payload.version }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ inputs.version }}"
+          set -euo pipefail
+          # `:-` because only one of the two is populated for any given
+          # event, and `set -u` would otherwise abort on the unused one.
+          if [ "${EVENT_NAME:-}" = "workflow_dispatch" ]; then
+            VERSION="${INPUT_VERSION:-}"
           else
-            VERSION="${{ github.event.client_payload.version }}"
+            VERSION="${PAYLOAD_VERSION:-}"
           fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          if [ -z "$VERSION" ]; then
+            echo "no rustledger version supplied for event ${EVENT_NAME:-}" >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Using rustledger version: $VERSION"
 
       - name: Download and verify the FFI component
