@@ -1,6 +1,6 @@
 ci:
   autoupdate_schedule: quarterly
-  skip: ["eslint", "stylelint", "prettier"]
+  skip: ["eslint", "oxlint", "stylelint", "prettier"]
 
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
@@ -49,3 +49,16 @@ repos:
         types_or: ["javascript", "svelte", "ts"]
         files: "^frontend/"
         pass_filenames: true
+
+      # oxlint owns the type-aware rules (via oxlint-tsgolint, which links
+      # typescript-go directly rather than the TS JS API). Runs with cwd
+      # frontend/ because oxlint resolves the tsgolint binary from the nearest
+      # node_modules, and exits non-zero with a clear message if it is missing
+      # rather than silently skipping every type-aware rule.
+      - id: oxlint
+        name: oxlint
+        language: system
+        entry: bash -c 'cd frontend && bunx oxlint --type-aware'
+        types_or: ["javascript", "svelte", "ts"]
+        files: "^frontend/"
+        pass_filenames: false
