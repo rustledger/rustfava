@@ -34,9 +34,9 @@ from rustfava.rustledger.component_engine import _finalize_query_result
 from rustfava.rustledger.component_engine import _meta_value_json
 from rustfava.rustledger.component_engine import _prune_superseded_components
 from rustfava.rustledger.component_engine import _unwrap_query_value
-from rustfava.rustledger.component_engine import RUSTLEDGER_VERSION
 from rustfava.rustledger.component_engine import RustledgerComponentEngine
 from rustfava.rustledger.constants import Missing
+from rustfava.rustledger.engine import RUSTLEDGER_VERSION
 from rustfava.rustledger.engine import RustledgerError
 
 
