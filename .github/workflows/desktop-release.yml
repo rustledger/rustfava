@@ -4,14 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version tag (e.g., v0.1.0)'
+        description: "Version tag (e.g., v0.1.0)"
         required: true
         type: string
   push:
     branches:
       - main
     tags:
-      - 'v*'
+      - "v*"
   pull_request:
     branches:
       - main
@@ -93,17 +93,17 @@ jobs:
           gh release download ${{ steps.rustledger-tag.outputs.tag }} \
             --repo ${{ env.RUSTLEDGER_REPO }} \
             --pattern "rustledger-ffi-component-*.wasm" \
-            --output src/rustfava/rustledger/rustledger_ffi_component.wasm
+            --output "src/rustfava/rustledger/rustledger_ffi_component-${{ steps.rustledger-tag.outputs.tag }}.wasm"
         env:
           GH_TOKEN: ${{ github.token }}
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.13'
+          python-version: "3.13"
           # x64 on the macos-14 x86_64 entry = Intel Python under Rosetta (#222)
           architecture: ${{ matrix.python-arch }}
-          cache: 'pip'
+          cache: "pip"
 
       - name: Install Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -376,7 +376,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Install Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
