@@ -20,6 +20,7 @@ mirroring the JSON-RPC surface's tagged unions.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import subprocess
@@ -154,7 +155,16 @@ def _default_wasm_path() -> Path:
     override = os.environ.get("RUSTLEDGER_COMPONENT_WASM")
     if override:
         return Path(override)
-    return Path(__file__).parent / "rustledger_ffi_component.wasm"
+    # The pinned version is part of the FILENAME, so bumping
+    # RUSTLEDGER_VERSION is a cache miss by construction. The name used to be
+    # version-agnostic while the download was guarded by `not exists()`, which
+    # meant a version bump never re-downloaded: a working tree kept using the
+    # previous release's component indefinitely, and the resulting test run
+    # was GREEN, so nothing prompted anyone to look (rustfava#286).
+    return (
+        Path(__file__).parent
+        / f"rustledger_ffi_component-{RUSTLEDGER_VERSION}.wasm"
+    )
 
 
 def _download_component_wasm(wasm_path: Path) -> None:
@@ -174,12 +184,34 @@ def _download_component_wasm(wasm_path: Path) -> None:
         wasm_path.parent.mkdir(parents=True, exist_ok=True)
         urllib.request.urlretrieve(_COMPONENT_WASM_URL, wasm_path)  # noqa: S310
         print("Done.", file=sys.stderr)  # noqa: T201
+        _prune_superseded_components(wasm_path)
     except Exception as e:  # noqa: BLE001
         wasm_path.unlink(missing_ok=True)
         print(  # noqa: T201
             f"Could not download component wasm: {e}",
             file=sys.stderr,
         )
+
+
+def _prune_superseded_components(current: Path) -> None:
+    """Delete component wasms for other versions sitting beside ``current``.
+
+    Versioned filenames would otherwise accumulate one ~7 MB artifact per
+    upgrade. Best-effort: a file that cannot be removed is left alone, since
+    failing to tidy up must never break a working engine.
+    """
+    superseded = list(current.parent.glob("rustledger_ffi_component-*.wasm"))
+    # Also reclaim the pre-#286 unversioned file, which is now never read and
+    # would otherwise sit dead in every existing checkout.
+    legacy = current.parent / "rustledger_ffi_component.wasm"
+    if legacy.exists():
+        superseded.append(legacy)
+    for stale in superseded:
+        if stale == current:
+            continue
+        # Tidy-up must never break a working engine.
+        with contextlib.suppress(OSError):
+            stale.unlink()
 
 
 def _snake(name: str) -> str:
