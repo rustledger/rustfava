@@ -137,6 +137,7 @@ jobs:
           cache-dependency-glob: "uv.lock"
       - run: cd frontend && bun install --frozen-lockfile
       - run: cd frontend && bun run eslint --max-warnings 0 .
+      - run: cd frontend && bun run oxlint
       - run: cd frontend && bun run stylelint "**/*.{css,svelte}"
       - run: cd frontend && bun run tsc
       - run: cd frontend && bun run svelte-check

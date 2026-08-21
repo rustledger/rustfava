@@ -9,7 +9,8 @@
     "sync-pre-commit": "bun run sync-pre-commit.ts",
     "test": "node --conditions browser --import ./setup.js test.ts",
     "tsc": "tsc",
-    "svelte-check": "svelte-check"
+    "svelte-check": "svelte-check",
+    "oxlint": "oxlint --type-aware"
   },
   "overrides": {
     "parse5": "^7.3.0"
@@ -38,6 +39,8 @@
     "eslint-plugin-simple-import-sort": "^14.0.0",
     "eslint-plugin-svelte": "^3.19.0",
     "jsdom": "^30.0.1",
+    "oxlint": "^1.79.0",
+    "oxlint-tsgolint": "^7.0.2001",
     "postcss-html": "^2.0.0",
     "prettier": "^3.8.4",
     "prettier-plugin-svelte": "^4.1.1",
