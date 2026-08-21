@@ -85,7 +85,13 @@ from rustfava.rustledger.engine import RustledgerError
 #
 # Kept in step with the pinned release anyway, as documentation of what the
 # bindings were written against.
-_WIT_VERSION = "3.4.0"
+#
+# Drift here is SILENT rather than fatal, so it will not announce itself:
+# wasmtime matches component imports on semver compatibility, so a host defined
+# at 3.4.0 still satisfies a component importing 3.11.0. Only a major bump
+# fails — substituting 4.0.0 or 2.0.0 raises "component imports instance
+# rustledger:ledger/host@..., but a matching implementation was not found".
+_WIT_VERSION = "3.11.0"
 _LEDGER = f"rustledger:ledger/ledger@{_WIT_VERSION}"
 _BUILDER = f"rustledger:ledger/builder@{_WIT_VERSION}"
 _UTIL = f"rustledger:ledger/util@{_WIT_VERSION}"
