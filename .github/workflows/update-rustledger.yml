@@ -55,9 +55,15 @@ jobs:
           curl -fsSL -o component.wasm.sha256 "${BASE}/${ASSET}.sha256"
           echo "$(cut -d' ' -f1 component.wasm.sha256)  component.wasm" | sha256sum -c -
 
-          # Vendor the verified component (the previous bot only edited the
-          # version string and left the vendored artifact stale — see #219/#220).
-          cp component.wasm src/rustfava/rustledger/rustledger_ffi_component.wasm
+          # Deliberately NOT vendored into the repo. #219/#220 added a `cp` here
+          # to keep a committed artifact fresh, but the destination is gitignored
+          # (.gitignore:52) and absent from add-paths, so it was never once
+          # committed — `git log --all` on that path is empty. #243 settled the
+          # question the other way: committing the wasm shipped ~6 MB of
+          # unconsumed sdist weight per release, so the component is downloaded
+          # at runtime against the pinned version instead (see #286).
+          #
+          # component.wasm stays in the workspace: the WIT gate below reads it.
 
       - name: Install wasm-tools
         uses: taiki-e/install-action@v2
@@ -129,21 +135,42 @@ jobs:
 
       - name: Compose PR body
         id: body
+        # Body values arrive through `env:`, NOT `${{ }}` interpolation. A
+        # `${{ }}` expression is pasted into the script text before bash parses
+        # it, so the backticks inside `reasons` were parsed as command
+        # substitution: their contents were executed and replaced with the
+        # (empty) output, and the body read "WIT package version changed:  ->
+        # (host bindings in  likely need changes)" — losing exactly the two
+        # versions and the filename a reviewer needs. `set -euo pipefail` does
+        # not catch it, because the substitution's exit status is never
+        # examined. A shell variable's value is not re-scanned for
+        # substitutions, so `$REASONS` interpolates literally. This is also the
+        # standard fix for the script-injection surface `${{ }}`-into-`run`
+        # carries.
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          REASONS: ${{ steps.gate.outputs.reasons }}
+          NEW_WIT: ${{ steps.gate.outputs.new_wit }}
+          CUR_WIT: ${{ steps.gate.outputs.cur_wit }}
+          NEEDS_REVIEW: ${{ steps.gate.outputs.needs_review }}
         run: |
           set -euo pipefail
-          VERSION="${{ steps.version.outputs.version }}"
-          if [ "${{ steps.gate.outputs.needs_review }}" = "true" ]; then
+          if [ "$NEEDS_REVIEW" = "true" ]; then
             cat > pr-body.md <<EOF
           Automated update of rustledger to ${VERSION} — **held for human review** (draft, no auto-merge) because:
 
-          ${{ steps.gate.outputs.reasons }}
+          ${REASONS}
 
           ## What the bot already did
-          - Bumped \`RUSTLEDGER_VERSION\` and refreshed the vendored component (sha256-verified)
-          - Bumped \`_WIT_VERSION\` to \`${{ steps.gate.outputs.new_wit }}\` (if it changed)
+          - Bumped \`RUSTLEDGER_VERSION\` in \`engine.py\`
+          - Bumped \`_WIT_VERSION\` to \`${NEW_WIT}\` (if it changed)
+
+          The component is not vendored in this repo — it is gitignored and
+          downloaded at runtime against the pinned version. This run downloaded
+          the release asset and verified its sha256 in order to read its WIT.
 
           ## What a human must check
-          - [ ] New/changed WIT **imports**: does the component need host bindings the linker doesn't define yet? (\`wasm-tools component wit\` the vendored file; see the \`host\` interface handling in \`component_engine.py\`)
+          - [ ] New/changed WIT **imports**: does the component need host bindings the linker doesn't define yet? (\`wasm-tools component wit\` the release asset; see the \`host\` interface handling in \`component_engine.py\`)
           - [ ] Run the rustledger test suites locally (\`just test-py\`)
           - [ ] Update marshalling for any changed WIT types
 
@@ -153,7 +180,7 @@ jobs:
             cat > pr-body.md <<EOF
           Automated update of rustledger WASM version to ${VERSION}.
 
-          The component's WIT version matches the host bindings (\`${{ steps.gate.outputs.cur_wit }}\`) and the release notes carry no breaking markers, so this auto-merges once CI passes. The component was sha256-verified against the release asset.
+          The component's WIT version matches the host bindings (\`${CUR_WIT}\`) and the release notes carry no breaking markers, so this auto-merges once CI passes. The component was sha256-verified against the release asset.
 
           See [rustledger releases](https://github.com/rustledger/rustledger/releases) for the changelog.
           EOF
