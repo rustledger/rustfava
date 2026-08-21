@@ -183,13 +183,20 @@ jobs:
           commit-message: "chore: upgrade rustledger to ${{ steps.version.outputs.version }}"
           title: "chore: upgrade rustledger to ${{ steps.version.outputs.version }}"
           body-path: pr-body.md
-          # Only engine.py is an intended repo change. The root component.wasm
-          # / .sha256 / pr-body.md are workflow-run working files; without
-          # this scoping create-pull-request committed them, shipping ~6 MB
-          # of unconsumed sdist weight per release that also went silently
-          # stale on manual bumps (#243).
+          # The root component.wasm / .sha256 / pr-body.md are workflow-run
+          # working files; without this scoping create-pull-request committed
+          # them, shipping ~6 MB of unconsumed sdist weight per release that
+          # also went silently stale on manual bumps (#243).
+          #
+          # EVERY file a step above edits must be listed here or the edit is
+          # discarded with no warning — while the PR body still reports it as
+          # done. component_engine.py was missing, so the gate step's
+          # `_WIT_VERSION` sed never reached a commit and the constant sat at
+          # 3.4.0 against a 3.11.0 component (silent, because wasmtime matches
+          # component imports on semver compatibility). See #284.
           add-paths: |
             src/rustfava/rustledger/engine.py
+            src/rustfava/rustledger/component_engine.py
           branch: chore/upgrade-rustledger-${{ steps.version.outputs.version }}
           delete-branch: true
           draft: ${{ steps.gate.outputs.needs_review }}
