@@ -15,11 +15,46 @@ jobs:
     if: github.actor == 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # `secrets` is not available in a step-level `if`, so the availability
+    # check has to come through env.
+    env:
+      HAS_APP_CREDS: ${{ secrets.BOT_APP_ID != '' && secrets.BOT_PRIVATE_KEY != '' }}
     steps:
+      # Push as the GitHub App, not GITHUB_TOKEN.
+      #
+      # A push made with GITHUB_TOKEN is attributed to github-actions[bot], and
+      # every workflow run it creates lands in `action_required` awaiting a
+      # manual "Approve and run workflows". The check list then shows a single
+      # green license/cla and no failures, which reads as "CI hasn't started"
+      # rather than "CI is blocked" — #282 sat that way for six days, and #296
+      # is sitting that way now. Pushing with an App installation token makes
+      # the runs ordinary.
+      #
+      # Only frontend Dependabot PRs are affected, because only they touch
+      # frontend/package.json and so fire this workflow: #294 and #295 opened
+      # in the same minute and ran green throughout.
+      - name: Generate GitHub App token
+        id: app-token
+        if: env.HAS_APP_CREDS == 'true'
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.BOT_APP_ID }}
+          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
+
+      # Dependabot-triggered runs read the *Dependabot* secrets store, which is
+      # separate from the Actions store the other workflows use. If BOT_APP_ID
+      # and BOT_PRIVATE_KEY are only registered as Actions secrets they are
+      # invisible here, so say so loudly instead of quietly reverting to the
+      # behaviour above and leaving someone to rediscover it.
+      - name: Warn when the App token is unavailable
+        if: env.HAS_APP_CREDS != 'true'
+        run: |
+          echo "::warning title=Falling back to GITHUB_TOKEN::BOT_APP_ID / BOT_PRIVATE_KEY are not visible to this run. Dependabot runs read the Dependabot secrets store, not the Actions one, so both must be registered there as well. The lockfile will still be regenerated, but the resulting CI runs will need manual approval."
+
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.head_ref }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
@@ -29,9 +64,18 @@ jobs:
         run: cd frontend && bun install --no-frozen-lockfile
 
       - name: Commit and push if changed
+        env:
+          # Attribute the commit to whoever is actually pushing it.
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          set -euo pipefail
+          if [ -n "${APP_SLUG:-}" ]; then
+            git config user.name "${APP_SLUG}[bot]"
+            git config user.email "${APP_SLUG}[bot]@users.noreply.github.com"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          fi
           git add frontend/bun.lock
           if git diff --staged --quiet; then
             echo "No lockfile changes"
