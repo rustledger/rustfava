@@ -16,6 +16,53 @@ Key changes from Fava:
 - **Optional beancount compatibility**: If you need to use Beancount plugins or
   the import system, install with `uv pip install rustfava[beancount-compat]`.
 
+## v1.32.0 (2026-08-22)
+
+Engine upgraded from rustledger v0.19.0 to v0.22.0. This release also fixes
+three packaging bugs that made v1.31.0 unusable on some platforms.
+
+**Fixed since v1.31.0**
+
+- **The desktop and server builds start again.** The frozen sidecar shipped
+  without `simplejson`, a core dependency imported during startup, so
+  `rustfava-server` died immediately with `ModuleNotFoundError` (#255, #258).
+  The sidecar now installs the project's real dependencies rather than a
+  hand-maintained list that had drifted, and a smoke test runs the frozen binary
+  so the two cannot diverge silently again.
+- **The macOS app launches on Apple Silicon.** Bundles were unsigned, and arm64
+  macOS refuses to run unsigned executables — Gatekeeper reported "rustfava is
+  damaged and can't be opened", which is misleading wording for a missing
+  signature (#272). The bundle is now ad-hoc signed. It is still not notarized,
+  so first launch shows the unidentified-developer prompt.
+- **The Docker image runs on ARM64.** It was published amd64-only and the image
+  could not even be built on an aarch64 host, because the Dockerfile hard-coded
+  an `x86_64-linux` wasmtime download (#259). Images now publish for
+  `linux/amd64` and `linux/arm64`, and that download is gone — the runtime uses
+  the `wasmtime` Python package, so nothing in the image is architecture
+  specific.
+- Document payloads and diagnostics now map guest paths back to host paths
+  (#281).
+- An ambiguous entry hash is refused rather than silently resolved to one of the
+  candidates (#273).
+
+**Engine (rustledger v0.20–v0.22)**
+
+- Booking, validation and query fixes across four engine releases, including
+  compound cost handling (WIT 3.3) and gap re-arming.
+- Queries now run through `session.from-entries`, so the held ledger is queried
+  in place instead of shuttling directives across the FFI boundary (#253).
+- Metadata arithmetic is evaluated (`10 + 10` yields `20`), matching beancount.
+- `JOURNAL` applies `MAXWIDTH` to payee and narration, matching beanquery.
+
+**Docker**
+
+- The image is smaller: no apt packages, no bun, no wasmtime CLI, and the source
+  tree is removed after install.
+- It binds dual-stack by default, so `http://localhost:<port>` works on hosts
+  that resolve to IPv6 first.
+- The rustledger component is pre-fetched into the image, so containers work
+  offline and the first page load does not stall on a download.
+
 ## v1.31.0 (2026-07-02)
 
 Engine upgraded from rustledger v0.16.5 to v0.19.0, bringing:
