@@ -10,6 +10,7 @@ Build the component with::
 from __future__ import annotations
 
 import tempfile
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -446,3 +447,56 @@ def test_open_session_entries_holds_and_queries(
     assert sorted(map(str, held["rows"])) == sorted(map(str, shipped["rows"]))
     # The session holds ALL the entries it was given.
     assert len(session.info()["entries"]) == len(entries)
+
+
+SRC_RETURNS = (
+    "2024-01-01 open Assets:Cash USD\n"
+    "2024-01-01 open Assets:Invest:Fund FUND\n"
+    "2024-01-01 open Income:Invest:Dividend USD\n"
+    '2024-01-02 * "buy"\n'
+    "  Assets:Invest:Fund  10 FUND {10 USD}\n"
+    "  Assets:Cash\n"
+    '2024-06-01 * "dividend"\n'
+    "  Assets:Cash  5 USD\n"
+    "  Income:Invest:Dividend\n"
+    "2024-12-31 price FUND  12 USD\n"
+)
+
+
+def test_session_returns_computes_money_and_time_weighted(
+    engine: RustledgerComponentEngine,
+) -> None:
+    """`session.returns` reports the scope's flows and both return metrics.
+
+    The decimal fields come back as raw full-precision strings by design —
+    the host formats them — so they are asserted as strings, not floats.
+    """
+    session = engine.open_session(SRC_RETURNS)
+    result = session.returns(
+        ["Assets:Invest"], ["Income:Invest"], "USD", "2024-12-31"
+    )
+
+    assert result["cash_flows"] > 0
+    assert isinstance(result["invested"], str)
+    assert isinstance(result["distributions"], str)
+    assert isinstance(result["current_value"], str)
+    # 10 FUND bought at 10 USD, valued at 12 USD on the end date.
+    assert Decimal(result["current_value"]) == Decimal(120)
+    assert Decimal(result["invested"]) == Decimal(100)
+    # Annualized fractions, or None where undefined.
+    for key in ("money_weighted", "time_weighted"):
+        assert result[key] is None or isinstance(result[key], float)
+
+
+def test_session_returns_surfaces_engine_errors(
+    engine: RustledgerComponentEngine,
+) -> None:
+    """An `err(message)` arm becomes a RustledgerError, not a bogus number.
+
+    wasmtime-py drops the `result` tag and hands back the payload alone, so
+    success and failure are told apart by type: a `returns-result` Record
+    versus a bare `str`. This is the first binding to exercise that path.
+    """
+    session = engine.open_session(SRC_RETURNS)
+    with pytest.raises(RustledgerError, match="end-date"):
+        session.returns(["Assets:Invest"], ["Income:Invest"], "USD", "nope")
