@@ -89,11 +89,13 @@ except Exception:
 # Ensure rustfava can report its version from the frozen binary. The bundle
 # ships no dist-info metadata, so importlib.metadata.version() fails and
 # rustfava falls back to rustfava._version (see issue #191). Generate that
-# module here from RUSTFAVA_VERSION (set from the git tag on release builds)
+# module here from FROZEN_APP_VERSION (set from the git tag on release builds;
+# named outside the RUSTFAVA_ prefix because click's auto_envvar_prefix would
+# otherwise read it as the `--version` flag when the frozen binary runs)
 # or setuptools_scm when building from a full source checkout.
 version_file = rustfava_dir / "_version.py"
 if not version_file.exists():
-    version = os.environ.get("RUSTFAVA_VERSION")
+    version = os.environ.get("FROZEN_APP_VERSION")
     if not version:
         try:
             from setuptools_scm import get_version

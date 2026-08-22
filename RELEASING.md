@@ -35,8 +35,20 @@ Monitor at: https://github.com/rustledger/rustfava/actions
 
 ### 3. PyPI deployment
 
-Publishes automatically when the `build-publish.yml` workflow reaches the `pypi`
-job — no manual approval is configured (verified during v1.31.0).
+The workflow is `publish.yml` (this document previously called it
+`build-publish.yml`, which does not exist).
+
+Its `publish` job targets the **`pypi` environment, which has protection rules**
+— the run sits in `waiting` until a deployment reviewer approves it. Approve at
+the run's page, or:
+
+```bash
+gh api repos/rustledger/rustfava/actions/runs/<run-id>/pending_deployments \
+  -f state=approved -f "environment_ids[]=<id>" -f comment=""
+```
+
+Everything before it (`build`, `docker`, `smoke-wheel`) runs unattended, so the
+Docker image publishes without approval — only PyPI waits.
 
 ### 4. Publish the GitHub release
 
