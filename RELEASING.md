@@ -70,9 +70,12 @@ Or via GitHub UI: https://github.com/rustledger/rustfava/releases
 
 ### 5. Update Nix flake sources
 
-The `update-flake-sources.yml` workflow fires when a tag-triggered
-`Desktop Release` run completes (it can also be run manually via
-`gh workflow run update-flake-sources.yml -f version=vX.Y.Z`). It:
+The `update-flake-sources.yml` workflow fires when the **release is published**
+— i.e. after step 4, not before. It previously triggered on `Desktop Release`
+completing, which could never work: that run *creates the draft*, and a draft's
+assets are not downloadable, so it failed with "No desktop tarballs found" on
+every release. It can still be run manually via
+`gh workflow run update-flake-sources.yml -f version=vX.Y.Z`. It:
 
 1. Downloads release tarballs
 1. Computes SRI hashes
@@ -117,9 +120,9 @@ runs on tags.
 
 ### Nix flake sources not updated
 
-The `update-flake-sources.yml` workflow triggers when the tag's
-`Desktop Release` run completes successfully. If it didn't fire, dispatch it
-manually: `gh workflow run update-flake-sources.yml -f version=vX.Y.Z`.
+The workflow triggers on the release being **published**, so it will not run
+while the release is still a draft. If it did not fire, dispatch it manually:
+`gh workflow run update-flake-sources.yml -f version=vX.Y.Z`.
 
 ### PyPI publish failed
 
