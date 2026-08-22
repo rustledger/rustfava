@@ -2,7 +2,8 @@
 
 # rustfava
 
-**A beautiful desktop app for [rustledger](https://github.com/rustledger/rustledger)**
+**A beautiful desktop app for
+[rustledger](https://github.com/rustledger/rustledger)**
 
 Manage your finances with plain text accounting.
 
@@ -15,30 +16,31 @@ Manage your finances with plain text accounting.
 
 </div>
 
----
+______________________________________________________________________
 
 ## Why rustfava?
 
-| | |
-|---|---|
-| **Native app** | Double-click to launch, no terminal required |
-| **Fava interface** | The familiar Fava web UI you know and love |
-| **rustledger backend** | Blazing fast parsing via WebAssembly |
-| **Cross-platform** | Linux, macOS (Intel & Apple Silicon), Windows |
-| **Offline first** | Your financial data stays on your machine |
-| **Multiple files** | Open multiple ledgers in tabs |
+|                        |                                               |
+| ---------------------- | --------------------------------------------- |
+| **Native app**         | Double-click to launch, no terminal required  |
+| **Fava interface**     | The familiar Fava web UI you know and love    |
+| **rustledger backend** | Blazing fast parsing via WebAssembly          |
+| **Cross-platform**     | Linux, macOS (Intel & Apple Silicon), Windows |
+| **Offline first**      | Your financial data stays on your machine     |
+| **Multiple files**     | Open multiple ledgers in tabs                 |
 
 ## Install
 
 ### Desktop App
 
-Download the latest release for your platform from the [Releases page](https://github.com/rustledger/rustfava/releases/latest).
+Download the latest release for your platform from the
+[Releases page](https://github.com/rustledger/rustfava/releases/latest).
 
-| Platform | Format |
-|----------|--------|
-| **macOS** | `.dmg` (Intel & Apple Silicon) |
-| **Windows** | `.exe` installer or `.msi` |
-| **Linux** | `.AppImage`, `.deb`, `.rpm`, or `.tar.gz` |
+| Platform    | Format                                    |
+| ----------- | ----------------------------------------- |
+| **macOS**   | `.dmg` (Intel & Apple Silicon)            |
+| **Windows** | `.exe` installer or `.msi`                |
+| **Linux**   | `.AppImage`, `.deb`, `.rpm`, or `.tar.gz` |
 
 > **Engine**: rustfava runs the rustledger engine as an in-process WebAssembly
 > component, so the `wasmtime` Python package ships as a dependency and works
@@ -46,21 +48,23 @@ Download the latest release for your platform from the [Releases page](https://g
 
 ### Other Installation Methods
 
-| Method | Command |
-|--------|---------|
-| **Docker** (amd64/arm64) | `docker run -p 5000:5000 -v /path/to/ledger:/data ghcr.io/rustledger/rustfava /data/main.beancount` |
-| **PyPI** | `uv tool install rustfava` (requires Python 3.13+; the `wasmtime` runtime is installed automatically) |
-| **Nix** | `nix run github:rustledger/rustfava#desktop` |
+| Method                   | Command                                                                                               |
+| ------------------------ | ----------------------------------------------------------------------------------------------------- |
+| **Docker** (amd64/arm64) | `docker run -p 5000:5000 -v /path/to/ledger:/data ghcr.io/rustledger/rustfava /data/main.beancount`   |
+| **PyPI**                 | `uv tool install rustfava` (requires Python 3.13+; the `wasmtime` runtime is installed automatically) |
+| **Nix**                  | `nix run github:rustledger/rustfava#desktop`                                                          |
 
-<sub>Missing your platform? [Open an issue](https://github.com/rustledger/rustfava/issues/new) to request it.</sub>
+<sub>Missing your platform?
+[Open an issue](https://github.com/rustledger/rustfava/issues/new) to request
+it.</sub>
 
 ## Quick Start
 
 ### Desktop App
 
 1. Download the app for your platform
-2. Double-click to launch
-3. Open your `.beancount` file
+1. Double-click to launch
+1. Open your `.beancount` file
 
 ### Command Line
 
@@ -71,9 +75,14 @@ rustfava ledger.beancount
 
 ## What is this?
 
-rustfava is a fork of [Fava](https://github.com/beancount/fava) that replaces the Python beancount parser with [rustledger](https://github.com/rustledger/rustledger), compiled to WebAssembly for faster parsing and processing.
+rustfava is a fork of [Fava](https://github.com/beancount/fava) that replaces
+the Python beancount parser with
+[rustledger](https://github.com/rustledger/rustledger), compiled to WebAssembly
+for faster parsing and processing.
 
-The desktop app bundles everything into a native application using [Tauri](https://tauri.app/), so you get a fast, lightweight app with no dependencies.
+The desktop app bundles everything into a native application using
+[Tauri](https://tauri.app/), so you get a fast, lightweight app with no
+dependencies.
 
 ## Links
 
