@@ -151,12 +151,22 @@ jobs:
               print(f'Compiled {po} -> {mo}')
           "
 
-      - name: Set RUSTFAVA_VERSION from tag
+      - name: Set FROZEN_APP_VERSION from tag
         # The spec bakes this into rustfava/_version.py so the frozen binary
         # reports the real version without dist-info metadata (issue #191).
+        #
+        # Deliberately NOT named RUSTFAVA_VERSION. The CLI is declared with
+        # `auto_envvar_prefix: "RUSTFAVA"` (cli.py), so click maps
+        # RUSTFAVA_VERSION onto `--version` — a boolean flag. Writing it to
+        # $GITHUB_ENV leaks it into every later step in the job, including the
+        # smoke test that actually runs the frozen binary, which then died with
+        # `Invalid value for '--version': '1.32.0' is not a valid boolean`
+        # before serving anything. Only tag builds set it, so the collision
+        # first appeared on v1.32.0 — the first tagged release after the smoke
+        # test was added in #239.
         if: startsWith(github.ref, 'refs/tags/')
         shell: bash
-        run: echo "RUSTFAVA_VERSION=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_ENV"
+        run: echo "FROZEN_APP_VERSION=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_ENV"
 
       - name: Build sidecar with PyInstaller
         shell: bash
