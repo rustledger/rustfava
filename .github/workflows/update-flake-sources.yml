@@ -1,14 +1,21 @@
 name: Update Flake Sources
 
 on:
-  # Trigger after Desktop Release completes (which uploads the tarballs).
-  # NB: no `branches:` filter — for tag-triggered runs head_branch is the TAG
-  # (e.g. v1.31.0), so filtering to main silently excluded every release and
-  # this automation never fired (found during the v1.31.0 release). The
-  # job-level `if` below does the actual gating.
-  workflow_run:
-    workflows: ["Desktop Release"]
-    types: [completed]
+  # Fires when the RELEASE IS PUBLISHED, not when Desktop Release finishes.
+  #
+  # It used to trigger on `workflow_run` for Desktop Release, which cannot
+  # work: that workflow *creates a draft* release, and a draft's assets are
+  # not downloadable. So the job ran two minutes before the maintainer
+  # published, found nothing, and failed with "No desktop tarballs found for
+  # <tag>" — every release, by construction, because the documented order is
+  # "Desktop Release completes, then you publish the draft" (v1.32.0).
+  #
+  # An earlier fix to the same trigger is worth remembering: it had a
+  # `branches:` filter, and for tag-triggered runs head_branch is the TAG, so
+  # the filter silently excluded every release and the automation never fired
+  # at all (v1.31.0). Two failures, same trigger, both silent.
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       version:
@@ -23,13 +30,10 @@ permissions:
 jobs:
   update-sources:
     runs-on: ubuntu-latest
-    # Only run if:
-    # - workflow_dispatch (manual trigger), OR
-    # - workflow_run completed successfully AND was triggered by a tag push
+    # Manual dispatch, or a published release whose tag looks like a version.
     if: >
       github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       startsWith(github.event.workflow_run.head_branch, 'v'))
+      startsWith(github.event.release.tag_name, 'v')
     steps:
       - name: Generate GitHub App token
         id: app-token
@@ -49,15 +53,25 @@ jobs:
 
       - name: Get version
         id: version
+        # Values arrive through `env:` rather than `${{ }}`, which is pasted
+        # into the script text before bash parses it.
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ inputs.version }}"
+          set -euo pipefail
+          if [ "${EVENT_NAME:-}" = "workflow_dispatch" ]; then
+            VERSION="${INPUT_VERSION:-}"
           else
-            # workflow_run trigger - get tag from the triggering workflow
-            VERSION="${{ github.event.workflow_run.head_branch }}"
+            VERSION="${RELEASE_TAG:-}"
           fi
-          echo "version=${VERSION#v}" >> $GITHUB_OUTPUT
-          echo "tag=$VERSION" >> $GITHUB_OUTPUT
+          if [ -z "$VERSION" ]; then
+            echo "no version supplied for event ${EVENT_NAME:-}" >&2
+            exit 1
+          fi
+          echo "version=${VERSION#v}" >> "$GITHUB_OUTPUT"
+          echo "tag=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Using version: $VERSION"
 
       - name: Update desktop-sources.json
