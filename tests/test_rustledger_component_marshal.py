@@ -138,6 +138,17 @@ def _builder_func_type(engine: RustledgerComponentEngine, name: str) -> Any:
     return func.type(engine._store)
 
 
+def _session_func_type(engine: RustledgerComponentEngine, name: str) -> Any:
+    """The wasmtime func type of a `session` method, for its declared types."""
+    session = engine.open_session("2024-01-01 open Assets:Cash USD\n")
+    idx = engine._component.get_export_index(
+        f"[method]session.{name}",
+        engine._iface(ce._LEDGER),
+    )
+    func = session._inst.get_func(session._store, idx)
+    return func.type(session._store)
+
+
 def test_marshal_result_err_raises(engine: RustledgerComponentEngine) -> None:
     """result<ok, err> lifting: err surfaces as RustledgerError, ok unwraps.
 
@@ -532,3 +543,53 @@ def test_prune_superseded_components_tolerates_unremovable(
     _prune_superseded_components(current)  # must not raise
 
     assert older.exists()
+
+
+def test_payload_matches_discriminates_by_declared_ok_type(
+    engine: RustledgerComponentEngine,
+) -> None:
+    """Untagged `result` payloads are classified against the declared `ok`.
+
+    wasmtime-py drops the tag, so this is the only discriminator available.
+    It is decisive whenever `ok` is not a bare string: a Record cannot be
+    mistaken for an error message.
+    """
+    returns_type = _session_func_type(engine, "returns").result
+    ok_record_type = returns_type.ok
+    assert isinstance(ok_record_type, RecordType)
+
+    # A Record is the ok arm; a bare string is the error arm. The Record is a
+    # real one from the component rather than a fabricated stand-in — the
+    # previous `result` test passed only because it hand-built a tagged
+    # Variant the runtime never actually produces.
+    session = engine.open_session(SRC_RETURNS_MARSHAL)
+    real_record = session.returns(["Assets:Invest"], [], "USD", "2024-12-31")
+    assert isinstance(real_record, dict)  # marshalled ok arm
+    assert not ce._payload_matches("no price for FOO", ok_record_type)
+
+    # Variant and list ok-types classify on their own shapes.
+    create_ok = _builder_func_type(engine, "create").result.ok
+    assert ce._payload_matches(Variant("transaction", None), create_ok)
+    assert not ce._payload_matches("boom", create_ok)
+
+    # A primitive ok-type is undecidable, so anything is treated as success.
+    assert ce._payload_matches("anything", String())
+
+
+def test_marshal_untagged_result_raises_on_error_payload(
+    engine: RustledgerComponentEngine,
+) -> None:
+    """The error arm of an untagged `result` becomes a RustledgerError."""
+    returns_type = _session_func_type(engine, "returns").result
+    with pytest.raises(RustledgerError, match="no price"):
+        ce._marshal("no price for FOO", returns_type)
+
+
+SRC_RETURNS_MARSHAL = (
+    "2024-01-01 open Assets:Cash USD\n"
+    "2024-01-01 open Assets:Invest:Fund FUND\n"
+    '2024-01-02 * "buy"\n'
+    "  Assets:Invest:Fund  10 FUND {10 USD}\n"
+    "  Assets:Cash\n"
+    "2024-12-31 price FUND  12 USD\n"
+)

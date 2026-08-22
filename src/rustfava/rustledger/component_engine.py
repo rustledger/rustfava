@@ -416,6 +416,26 @@ def _unwrap_meta_value(value: Any) -> Any:
     return value
 
 
+def _payload_matches(value: Any, ok_type: Any) -> bool:
+    """Whether an untagged `result` payload is the ``ok`` arm, not the error.
+
+    wasmtime-py drops the tag (see :func:`_marshal`), so the declared ``ok``
+    type is the only discriminator available. This is decisive whenever ``ok``
+    is not a bare string — a `returns-result` Record cannot be confused with an
+    error message. It is genuinely undecidable for `result<string, string>`,
+    where both arms lift to `str`; those are treated as success, because the
+    component signals its failures for such functions by trapping rather than
+    returning, and mis-reading a real string as an error would be worse.
+    """
+    if isinstance(ok_type, RecordType):
+        return isinstance(value, Record)
+    if isinstance(ok_type, VariantType):
+        return isinstance(value, Variant)
+    # Every other `ok` in rustledger's WIT is a primitive, where the arms are
+    # indistinguishable; treat those as success (see the docstring).
+    return True
+
+
 def _marshal(value: Any, vtype: Any) -> Any:  # noqa: PLR0911, PLR0912
     """Convert a component value into plain Python, driven by its WIT type.
 
@@ -481,13 +501,22 @@ def _marshal(value: Any, vtype: Any) -> Any:  # noqa: PLR0911, PLR0912
             _marshal(v, t) for v, t in zip(value, vtype.elements, strict=False)
         ]
     if isinstance(vtype, ResultType):
-        # `result<ok, err>` lifts to a Variant(tag="ok"|"err"); wasmtime-py
-        # does NOT raise. Surface `err` as an exception, unwrap `ok`.
-        if value.tag == "err":
-            err = _marshal(value.payload, vtype.err) if vtype.err else None
-            msg = str(err) if err is not None else "component error"
-            raise RustledgerError(msg)
-        return _marshal(value.payload, vtype.ok) if vtype.ok else None
+        # `result<ok, err>` does NOT raise, and wasmtime-py hands back the
+        # PAYLOAD ALONE — no tag. `session.returns` returns the bare
+        # `returns-result` Record on success and a bare `str` on failure, so
+        # the two are told apart by type against the declared `ok`.
+        #
+        # A tagged Variant is still accepted first, so this keeps working if a
+        # wasmtime-py version lifts the tag.
+        if isinstance(value, Variant) and value.tag in {"ok", "err"}:
+            if value.tag == "err":
+                err = _marshal(value.payload, vtype.err) if vtype.err else None
+                msg = str(err) if err is not None else "component error"
+                raise RustledgerError(msg)
+            return _marshal(value.payload, vtype.ok) if vtype.ok else None
+        if _payload_matches(value, vtype.ok):
+            return _marshal(value, vtype.ok)
+        raise RustledgerError(str(value))
     # Fallback: an un-typed Record/Variant, an enum (lifts to str), or a
     # primitive.
     if isinstance(value, Record):
@@ -1072,6 +1101,40 @@ class ComponentSession:
         """Run a BQL query against the held ledger."""
         return _finalize_query_result(
             self._method("[method]session.query", query_string)
+        )
+
+    def returns(
+        self,
+        investments: list[str],
+        income: list[str],
+        currency: str,
+        end_date: str,
+    ) -> dict[str, Any]:
+        """Money-weighted (XIRR) and time-weighted returns over the ledger.
+
+        ``investments`` / ``income`` are account-name *prefixes* defining the
+        scope, mirroring ``rledger report returns --investments/--income``.
+        ``currency`` may be ``""`` to fall back to the ledger's first
+        ``operating_currency``. ``end_date`` (``YYYY-MM-DD``) is required — a
+        component has no clock — and is both the horizon and the terminal
+        valuation date.
+
+        The returned ``invested`` / ``distributions`` / ``current_value`` are
+        raw full-precision decimal strings, deliberately unformatted, so the
+        caller formats them for its locale. ``money_weighted`` /
+        ``time_weighted`` are annualized fractions (``0.1`` is 10%) and are
+        ``None`` where undefined.
+
+        The engine is strict about this: an unpriceable flow, an unresolvable
+        reporting currency, or a booking error raises rather than returning a
+        number that cannot be trusted.
+        """
+        return self._method(
+            "[method]session.returns",
+            investments,
+            income,
+            currency,
+            end_date,
         )
 
     def filter(self, begin_date: str, end_date: str) -> list[dict[str, Any]]:
