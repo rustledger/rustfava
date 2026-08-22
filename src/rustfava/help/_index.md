@@ -11,14 +11,14 @@ following topics:
 - [Import](./import) - the import system.
 - [Options](./options) - the available options.
 
-Rustfava comes with keyboard shortcuts - press <kbd>?</kbd> on any page to see the
-available ones.
+Rustfava comes with keyboard shortcuts - press <kbd>?</kbd> on any page to see
+the available ones.
 
-If you started rustfava from the command line, you can run `rustfava --help` to see all
-the available command line options.
+If you started rustfava from the command line, you can run `rustfava --help` to
+see all the available command line options.
 
-If you discover a bug in rustfava, or have some ideas for improvement, please open a
-[bug report](https://github.com/rustledger/rustfava/issues).
+If you discover a bug in rustfava, or have some ideas for improvement, please
+open a [bug report](https://github.com/rustledger/rustfava/issues).
 
 ### Related websites
 

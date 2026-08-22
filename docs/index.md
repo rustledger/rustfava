@@ -17,7 +17,9 @@ If you are new to rustfava or Beancount-format files, begin with the
 
 ### Desktop App (Recommended)
 
-Download the desktop app from [GitHub Releases](https://github.com/rustledger/rustfava/releases) - no installation required, just double-click to run.
+Download the desktop app from
+[GitHub Releases](https://github.com/rustledger/rustfava/releases) - no
+installation required, just double-click to run.
 
 ### Command Line
 

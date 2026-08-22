@@ -23,8 +23,8 @@ Query Language (BQL). Rustfava uses rustledger's built-in query engine. For an
 explanation of how BQL queries work, see the
 [Beancount Query Language Reference](http://furius.ca/beancount/doc/query).
 
-Rustfava displays charts for BQL queries - if they have exactly two columns like the
-following example with the first being a date or string and the second an
+Rustfava displays charts for BQL queries - if they have exactly two columns like
+the following example with the first being a date or string and the second an
 inventory, then a line chart or treemap chart is shown on the query page.
 
 ```
@@ -46,9 +46,9 @@ work with cost basis or market value instead, wrap the position in the
 SELECT account, COST(SUM(position)), VALUE(SUM(position)) GROUP BY account
 ```
 
-Rustfava supports downloading the result of these queries in various file formats.
-By default, only exporting to `csv` is supported. For support of `xlsx` and
-`ods`, install rustfava with the `excel` feature:
+Rustfava supports downloading the result of these queries in various file
+formats. By default, only exporting to `csv` is supported. For support of `xlsx`
+and `ods`, install rustfava with the `excel` feature:
 
 ```
 uv pip install rustfava[excel]
@@ -60,14 +60,14 @@ By clicking the `+` button or using the `n` keyboard shortcut you can open a
 form to insert a transaction to your Beancount file. The position that
 transactions are inserted at can be specified in a flexible way using the
 [`insert-entry`](./options#insert-entry) option. If you want to set a bookmark
-to this form, adding `#add-transaction` to any URL in rustfava will open it on load.
-Tags and links can be added in the form by adding them (separated by spaces) to
-the narration field, e.g., `narration #tag ^somelink`.
+to this form, adding `#add-transaction` to any URL in rustfava will open it on
+load. Tags and links can be added in the form by adding them (separated by
+spaces) to the narration field, e.g., `narration #tag ^somelink`.
 
 ## Up-to-date indicators
 
-Rustfava offers colored indicators that can help you keep your accounts up-to-date.
-They are shown next to accounts that have the metadata
+Rustfava offers colored indicators that can help you keep your accounts
+up-to-date. They are shown next to accounts that have the metadata
 `fava-uptodate-indication: TRUE` set on their Open directive. The colors have
 the following meaning:
 
@@ -90,8 +90,8 @@ number or a deep hierarchy of accounts, Rustfava offers the following options:
 
 ## Opening an external editor
 
-Rustfava can open up your source file in your favorite editor directly from the web
-interface using the `use-external-editor` configuration variable through the
+Rustfava can open up your source file in your favorite editor directly from the
+web interface using the `use-external-editor` configuration variable through the
 `beancount://` URL handler. See the
 [Beancount urlscheme](https://github.com/aumayr/beancount_urlscheme) project for
 pre-configured URL handlers for macOS and Cygwin.
@@ -103,8 +103,8 @@ Beancount file name on the top left to switch between the files.
 
 ## Custom links in the sidebar
 
-If you regularly use certain views in rustfava with different filters, you can put
-links to them in the sidebar. Custom links can be put in the Beancount file,
+If you regularly use certain views in rustfava with different filters, you can
+put links to them in the sidebar. Custom links can be put in the Beancount file,
 utilizing the `custom` directive:
 
 ```
@@ -129,8 +129,8 @@ current page but change the time filter to the current month.
 ## Language
 
 You can change the language of the interface by specifying the
-[`language`](./options#language) option. If no option is specified, rustfava tries
-to guess the language from your browser settings.
+[`language`](./options#language) option. If no option is specified, rustfava
+tries to guess the language from your browser settings.
 
 ## Documents upload
 

@@ -9,9 +9,8 @@ If you want to report a security issue, please open an issue on GitHub.
 
 ### Contributing code
 
-Make a fork and submit your Pull Request. If it's a
-large change or you want some help to get started with coding, open an issue
-beforehand to discuss it.
+Make a fork and submit your Pull Request. If it's a large change or you want
+some help to get started with coding, open an issue beforehand to discuss it.
 
 Please contribute tests as well. See the `tests/` subdirectory for existing
 tests, which can be run with `just test`.

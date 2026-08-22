@@ -1,15 +1,15 @@
 # Extensions
 
-Rustfava supports extensions. Extensions allow you to register hooks and generate
-your own report pages.
+Rustfava supports extensions. Extensions allow you to register hooks and
+generate your own report pages.
 
 If you use this extension system and need it to do more or need other hooks,
 please open an issue on [GitHub](https://github.com/rustledger/rustfava/issues).
 
-A rustfava extension is simply a Python module which contains a class that inherits
-from `RustfavaExtensionBase` from `rustfava.ext`. Invoking an extension is done via the
-`fava-extension` option in the beancount file. Check out `rustfava.ext.auto_commit`
-for an example.
+A rustfava extension is simply a Python module which contains a class that
+inherits from `RustfavaExtensionBase` from `rustfava.ext`. Invoking an extension
+is done via the `fava-extension` option in the beancount file. Check out
+`rustfava.ext.auto_commit` for an example.
 
 Extensions may also contain a report - this is detected when the extension's
 class has a `report_title` attribute. The template for the report should be in a
@@ -21,12 +21,12 @@ Finally, extensions may contain a Javascript module to be loaded in the
 frontend. The module should be in a Javascript file matching the class's name
 and the extension should have its `has_js_module` attribute set to `True`. The
 module can define functions to be called when different events happen. Take a
-look at `rustfava/ext/portfolio_list/PortfolioList.js` for an example. Currently,
-the following events/functions can be specified:
+look at `rustfava/ext/portfolio_list/PortfolioList.js` for an example.
+Currently, the following events/functions can be specified:
 
 - `init`: is called when a rustfava report is first opened
-- `onPageLoad`: Is called when any page in rustfava is loaded (so on first open and
-  on any further navigation).
+- `onPageLoad`: Is called when any page in rustfava is loaded (so on first open
+  and on any further navigation).
 - `onExtensionPageLoad`: Is called when the extension report is loaded.
 
 The type signature of the extension module is defined in
@@ -47,8 +47,8 @@ in addition to anything on the Python path. Single python files will also be
 searched - so for example a `my_extension.py` could be used by giving
 `my_extension`. Note that Python has a global namespace for currently loaded
 modules, so try avoiding simple names that might coincide with some Python
-library (as well as running rustfava on two files that have different extensions of
-the same name).
+library (as well as running rustfava on two files that have different extensions
+of the same name).
 
 Extensions allow for an optional configuration options string, whose structure
 is specified by the individual extension.
