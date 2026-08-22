@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
@@ -69,10 +68,7 @@ def test_query_balances(
 ) -> None:
     assert isinstance(run_query(".run custom_query"), QueryResultTable)
     bal = run_query("balances")
-    if sys.version_info >= (3, 12):
-        # This fails for some reason on older Pythons, probably some minor
-        # difference there.
-        snapshot(bal)
+    snapshot(bal)
     assert run_query(".run custom_query") == bal
     assert run_query(".run 'custom query with space'") == bal
 
@@ -146,9 +142,7 @@ def test_numberify_rows_renders_inventory_as_amount_strings() -> None:
         ({"ITOT": Decimal(60)},),
         ({"USD": Decimal(5), "EUR": Decimal(3)},),
     ]
-    columns = (object(),)  # single column; branch keys off the value, not col
-
-    out = _numberify_rows(rows, columns)
+    out = _numberify_rows(rows)
 
     assert out[0] == ("502.25 USD",)
     assert out[1] == ("60 ITOT",)

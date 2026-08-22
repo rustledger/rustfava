@@ -9,7 +9,8 @@
     "sync-pre-commit": "bun run sync-pre-commit.ts",
     "test": "node --conditions browser --import ./setup.js test.ts",
     "tsc": "tsc",
-    "svelte-check": "svelte-check"
+    "svelte-check": "svelte-check",
+    "oxlint": "oxlint --type-aware"
   },
   "overrides": {
     "parse5": "^7.3.0"
@@ -29,16 +30,18 @@
     "@types/d3-time": "^3.0.4",
     "@types/d3-time-format": "^4.0.3",
     "@types/dom-navigation": "^1.0.7",
-    "@types/jsdom": "^28.0.3",
+    "@types/jsdom": "^30.0.0",
     "@types/node": "^26.0.0",
     "chokidar": "^5.0.0",
     "esbuild": "^0.28.1",
     "esbuild-svelte": "^0.9.5",
     "eslint": "^10.5.0",
-    "eslint-plugin-simple-import-sort": "^13.0.0",
+    "eslint-plugin-simple-import-sort": "^14.0.0",
     "eslint-plugin-svelte": "^3.19.0",
-    "jsdom": "^29.1.1",
-    "postcss-html": "^1.8.1",
+    "jsdom": "^30.0.1",
+    "oxlint": "^1.79.0",
+    "oxlint-tsgolint": "^7.0.2001",
+    "postcss-html": "^2.0.0",
     "prettier": "^3.8.4",
     "prettier-plugin-svelte": "^4.1.1",
     "stylelint": "^17.13.0",

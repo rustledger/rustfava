@@ -48,7 +48,7 @@ Download the latest release for your platform from the [Releases page](https://g
 
 | Method | Command |
 |--------|---------|
-| **Docker** | `docker run -p 5000:5000 -v /path/to/ledger:/data ghcr.io/rustledger/rustfava /data/main.beancount` |
+| **Docker** (amd64/arm64) | `docker run -p 5000:5000 -v /path/to/ledger:/data ghcr.io/rustledger/rustfava /data/main.beancount` |
 | **PyPI** | `uv tool install rustfava` (requires Python 3.13+; the `wasmtime` runtime is installed automatically) |
 | **Nix** | `nix run github:rustledger/rustfava#desktop` |
 

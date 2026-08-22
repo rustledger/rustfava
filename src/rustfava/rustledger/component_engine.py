@@ -20,6 +20,7 @@ mirroring the JSON-RPC surface's tagged unions.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import subprocess
@@ -52,11 +53,46 @@ from rustfava.rustledger.engine import _check_api_version
 from rustfava.rustledger.engine import RUSTLEDGER_VERSION
 from rustfava.rustledger.engine import RustledgerError
 
-# The exported WIT interfaces of package ``rustledger:ledger``. The interface
-# IDs embed the full WIT package version (independent of the rustledger release
-# version), so a WIT bump means updating ``_WIT_VERSION`` here — a mismatch
-# makes ``get_export_index`` return ``None`` and every call fail.
-_WIT_VERSION = "3.3.0"
+# The WIT interfaces of package ``rustledger:ledger``. This version string is
+# used two ways: to build the interface IDs passed to ``get_export_index``, and
+# to name the ``host`` instance registered on the linker below.
+#
+# Matching is by MAJOR, not by exact version. Measured against the pinned
+# v0.21.0 component, which exports ``@3.4.0``:
+#
+#     pin 3.0.0 / 3.3.0 / 3.4.0 / 3.5.0 / 3.11.0
+#         -> instantiates, version() = 3.4
+#     pin 2.4.0 / 4.0.0
+#         -> WasmtimeError
+#
+# Either direction works within a major; only a different major fails. Note
+# where it fails — at instantiation, on the IMPORT side ("component imports
+# instance ``rustledger:ledger/host@3.4.0``, but a match ..."), because
+# ``_HOST`` below names the instance the linker offers -- not on export
+# lookup, which is where the old note pointed.
+#
+# So a MINOR bump does not require touching this, and the previous note here —
+# that a mismatch "makes ``get_export_index`` return ``None`` and every call
+# fail" — was wrong: this file has been pinned to 3.3.0 against a 3.4.0
+# component for as long as v0.21.0 has been pinned, and works.
+#
+# What a bump can genuinely break is a new MANDATORY IMPORT, which no version
+# string reveals: WIT 3.1 -> 3.2 added ``host.decrypt`` and made the component
+# un-instantiable until the linker grew the binding (the #218 incident).
+# ``update-rustledger.yml`` therefore holds ANY WIT change for human review,
+# and the question to answer is "what does the component import that
+# ``_define_host_interface`` does not define" — inspect it with
+# ``wasm-tools component wit``, not by comparing this constant.
+#
+# Kept in step with the pinned release anyway, as documentation of what the
+# bindings were written against.
+#
+# Drift here is SILENT rather than fatal, so it will not announce itself:
+# wasmtime matches component imports on semver compatibility, so a host defined
+# at 3.4.0 still satisfies a component importing 3.11.0. Only a major bump
+# fails — substituting 4.0.0 or 2.0.0 raises "component imports instance
+# rustledger:ledger/host@..., but a matching implementation was not found".
+_WIT_VERSION = "3.11.0"
 _LEDGER = f"rustledger:ledger/ledger@{_WIT_VERSION}"
 _BUILDER = f"rustledger:ledger/builder@{_WIT_VERSION}"
 _UTIL = f"rustledger:ledger/util@{_WIT_VERSION}"
@@ -119,7 +155,16 @@ def _default_wasm_path() -> Path:
     override = os.environ.get("RUSTLEDGER_COMPONENT_WASM")
     if override:
         return Path(override)
-    return Path(__file__).parent / "rustledger_ffi_component.wasm"
+    # The pinned version is part of the FILENAME, so bumping
+    # RUSTLEDGER_VERSION is a cache miss by construction. The name used to be
+    # version-agnostic while the download was guarded by `not exists()`, which
+    # meant a version bump never re-downloaded: a working tree kept using the
+    # previous release's component indefinitely, and the resulting test run
+    # was GREEN, so nothing prompted anyone to look (rustfava#286).
+    return (
+        Path(__file__).parent
+        / f"rustledger_ffi_component-{RUSTLEDGER_VERSION}.wasm"
+    )
 
 
 def _download_component_wasm(wasm_path: Path) -> None:
@@ -139,12 +184,34 @@ def _download_component_wasm(wasm_path: Path) -> None:
         wasm_path.parent.mkdir(parents=True, exist_ok=True)
         urllib.request.urlretrieve(_COMPONENT_WASM_URL, wasm_path)  # noqa: S310
         print("Done.", file=sys.stderr)  # noqa: T201
+        _prune_superseded_components(wasm_path)
     except Exception as e:  # noqa: BLE001
         wasm_path.unlink(missing_ok=True)
         print(  # noqa: T201
             f"Could not download component wasm: {e}",
             file=sys.stderr,
         )
+
+
+def _prune_superseded_components(current: Path) -> None:
+    """Delete component wasms for other versions sitting beside ``current``.
+
+    Versioned filenames would otherwise accumulate one ~7 MB artifact per
+    upgrade. Best-effort: a file that cannot be removed is left alone, since
+    failing to tidy up must never break a working engine.
+    """
+    superseded = list(current.parent.glob("rustledger_ffi_component-*.wasm"))
+    # Also reclaim the pre-#286 unversioned file, which is now never read and
+    # would otherwise sit dead in every existing checkout.
+    legacy = current.parent / "rustledger_ffi_component.wasm"
+    if legacy.exists():
+        superseded.append(legacy)
+    for stale in superseded:
+        if stale == current:
+            continue
+        # Tidy-up must never break a working engine.
+        with contextlib.suppress(OSError):
+            stale.unlink()
 
 
 def _snake(name: str) -> str:
@@ -324,6 +391,11 @@ def _cost_number_from_json(value: Any) -> Any:
                 return Variant(tag, (str(payload[0]), str(payload[1])))
             # v0.19 spread the pair as per_unit/total fields
             return Variant(tag, (str(value["per_unit"]), str(value["total"])))
+        if tag == "compound" and isinstance(payload, (list, tuple)):
+            # WIT 3.3 input case (rustledger#1700): `{a # b}` as written —
+            # (per-unit, LUMP-total). Pre-booking surfaces only; booked
+            # egress rewrites to per-unit-from-total (rustfava#234).
+            return Variant(tag, (str(payload[0]), str(payload[1])))
         return Variant(tag, str(payload))
     # A bare scalar (``_cost_to_json``'s flat string) is a per-unit cost.
     return Variant("per-unit", str(value))
@@ -762,20 +834,54 @@ class RustledgerComponentEngine:
 
     @staticmethod
     def _rewrite_guest_paths(result: dict[str, Any], host_dir: Path) -> None:
-        """Rewrite ``/work/...`` guest paths in a load result to host paths."""
+        """Rewrite ``/work/...`` guest paths in a load result to host paths.
+
+        Three kinds of path cross this boundary, and all three must be mapped:
+
+        1. ``meta.filename`` — where a directive was *written*.
+        2. A ``document`` directive's ``path`` — the file it *points at*. This
+           is a second, independent path, and it is the only one that matters
+           for documents found by discovery rather than written by hand: those
+           are synthesized, so their ``meta.filename`` is ``<unknown>`` and
+           mapping only ``meta`` is a no-op for them. Leaving it guest-side
+           made every auto-discovered document unreachable — ``statement_path``
+           matches a resolved host path against ``Document.filename`` and can
+           never hit, and ``/document/`` then hands ``send_file`` a path that
+           does not exist on the host (rustfava #277).
+        3. Guest paths *embedded in* diagnostic messages, which are rendered in
+           the UI. These are substrings, not whole fields, so they
+           are relocated by prefix rather than parsed out — a document
+           path may contain spaces, so there is no reliable way to find
+           where one ends.
+        """
+        guest_root = "/work/"
 
         def to_host(p: Any) -> Any:
-            if isinstance(p, str) and p.startswith("/work/"):
-                return str(host_dir / p[len("/work/") :])
+            if isinstance(p, str) and p.startswith(guest_root):
+                return str(host_dir / p[len(guest_root) :])
             return p
+
+        def to_host_embedded(s: Any) -> Any:
+            if isinstance(s, str) and guest_root in s:
+                return s.replace(guest_root, f"{host_dir}{os.sep}")
+            return s
 
         for entry in result.get("entries", []):
             meta = entry.get("meta")
             if isinstance(meta, dict) and "filename" in meta:
                 meta["filename"] = to_host(meta["filename"])
+            # `path` is unique to `document-dir` among output directives, but
+            # gate on the type anyway so a future directive that gains a `path`
+            # meaning something other than a host file is not silently
+            # rewritten.
+            if entry.get("type") == "document" and "path" in entry:
+                entry["path"] = to_host(entry["path"])
         for include in result.get("includes", []):
             if isinstance(include, dict) and "path" in include:
                 include["path"] = to_host(include["path"])
+        for error in result.get("errors", []):
+            if isinstance(error, dict) and "message" in error:
+                error["message"] = to_host_embedded(error["message"])
 
     def clamp_entries(
         self,
@@ -862,6 +968,29 @@ class RustledgerComponentEngine:
             "[constructor]session", self._iface(_LEDGER)
         )
         handle = inst.get_func(store, fidx)(store, source)
+        return ComponentSession(self, store, inst, handle)
+
+    def open_session_entries(
+        self, entries_json: list[dict[str, Any]]
+    ) -> ComponentSession:
+        """Hold an already-loaded entry set in a session (WIT >= 3.4.0).
+
+        The entries marshal across the wire ONCE here; subsequent
+        ``session.query`` calls run against directives held inside the
+        component with no per-call shuttling — the missing piece that lets
+        fava's FILTERED entry sets (#249) use sessions at all. Raises on
+        components older than 3.4.0 (no ``from-entries`` export); callers
+        gate/fall back (see ``rustfava.rustledger.query.SessionCache``).
+        """
+        self._ensure_version()
+        store, inst = self._instantiate()
+        fidx = self._component.get_export_index(
+            "[static]session.from-entries", self._iface(_LEDGER)
+        )
+        func = inst.get_func(store, fidx)
+        entries_type = func.type(store).params[0][1]
+        wit_entries = _unmarshal(list(entries_json), entries_type)
+        handle = func(store, wit_entries)
         return ComponentSession(self, store, inst, handle)
 
     def open_session_file(

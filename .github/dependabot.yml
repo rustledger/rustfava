@@ -17,6 +17,36 @@ updates:
       frontend-dependencies:
         patterns:
           - "*"
+    ignore:
+      # TypeScript 7 is the native port and has no stable JS API yet, so every
+      # tool that reaches into the TS compiler API from JS breaks on it.
+      # typescript-eslint caps at <6.1.0 and its TS7 issue (#10940) is labelled
+      # "blocked by external API"; svelte-check and svelte2tsx cap at ^6. Until
+      # those ship support there is no route to TS7 — see #282, which this
+      # would otherwise regenerate every week.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+
+  # The desktop app has its own manifests and was covered by neither the
+  # /frontend npm entry nor any cargo entry, so its dependencies never received
+  # update PRs. Both had drifted several majors by the time this was noticed.
+  - package-ecosystem: "npm"
+    directory: "/desktop"
+    schedule:
+      interval: "weekly"
+    groups:
+      desktop-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "cargo"
+    directory: "/desktop/src-tauri"
+    schedule:
+      interval: "weekly"
+    groups:
+      desktop-rust-dependencies:
+        patterns:
+          - "*"
 
   - package-ecosystem: "github-actions"
     directory: "/"

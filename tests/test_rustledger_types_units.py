@@ -58,6 +58,12 @@ def test_cost_number_values_wire_formats() -> None:
         None,
         Decimal(7),
     )
+    # WIT 3.3 compound `{a # b}` (rustledger#1700): per-unit + LUMP —
+    # pre-booking surfaces only (rustfava#234)
+    assert cost_number_values({"type": "compound", "value": ["5", "10"]}) == (
+        Decimal(5),
+        Decimal(10),
+    )
     # unknown kind degrades to no cost number
     assert cost_number_values({"kind": "mystery", "value": "1"}) == (
         None,

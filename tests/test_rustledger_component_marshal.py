@@ -8,6 +8,7 @@ exercise the pure helpers and error/edge branches that the integration tests
 
 from __future__ import annotations
 
+import os
 import urllib.request
 from decimal import Decimal
 from pathlib import Path
@@ -31,15 +32,32 @@ from rustfava.rustledger.component_engine import _download_component_wasm
 from rustfava.rustledger.component_engine import _drop_none
 from rustfava.rustledger.component_engine import _finalize_query_result
 from rustfava.rustledger.component_engine import _meta_value_json
+from rustfava.rustledger.component_engine import _prune_superseded_components
 from rustfava.rustledger.component_engine import _unwrap_query_value
 from rustfava.rustledger.component_engine import RustledgerComponentEngine
 from rustfava.rustledger.constants import Missing
+from rustfava.rustledger.engine import RUSTLEDGER_VERSION
 from rustfava.rustledger.engine import RustledgerError
 
 
 def test_wasm_path_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RUSTLEDGER_COMPONENT_WASM", "/somewhere/custom.wasm")
     assert _default_wasm_path() == Path("/somewhere/custom.wasm")
+
+
+def test_wasm_path_without_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The bundled-path fallback must be covered regardless of ambient env.
+
+    rustledger's downstream CI exports ``RUSTLEDGER_COMPONENT_WASM`` for the
+    whole pytest run, which meant this branch never executed there and the
+    100% coverage gate failed on an env quirk rather than a real gap. Delete
+    the variable explicitly so both branches are covered in every
+    environment.
+    """
+    monkeypatch.delenv("RUSTLEDGER_COMPONENT_WASM", raising=False)
+    path = _default_wasm_path()
+    assert path.name == f"rustledger_ffi_component-{RUSTLEDGER_VERSION}.wasm"
+    assert path.parent.name == "rustledger"
 
 
 def test_download_component_writes_file(
@@ -142,6 +160,9 @@ def test_cost_number_from_json_shapes() -> None:
     assert (v.tag, v.payload) == ("per-unit-from-total", ("2", "10"))
     v = ce._cost_number_from_json({"type": "total", "value": "10"})
     assert (v.tag, v.payload) == ("total", "10")
+    # WIT 3.3 compound input case (rustledger#1700, rustfava#234)
+    v = ce._cost_number_from_json({"type": "compound", "value": ["5", "10"]})
+    assert (v.tag, v.payload) == ("compound", ("5", "10"))
     v = ce._cost_number_from_json("3.5")
     assert (v.tag, v.payload) == ("per-unit", "3.5")
 
@@ -307,6 +328,61 @@ def test_rewrite_guest_paths_edge_shapes() -> None:
     assert result["includes"][1] == {"other": "shape"}
 
 
+def test_rewrite_guest_paths_document_payload_and_messages() -> None:
+    """A document's payload path and diagnostic messages are mapped too.
+
+    Regression for #277. ``meta.filename`` is where a directive was *written*;
+    a ``document`` directive's ``path`` is the file it *points at*, and those
+    are independent. Documents found by discovery are synthesized, so they have
+    no source location at all — mapping only ``meta`` is a complete no-op for
+    exactly the entries whose payload path matters, which is why every
+    auto-discovered document was left pointing into the sandbox.
+    """
+    result: dict[str, Any] = {
+        "entries": [
+            # The shape that broke: synthesized by discovery, so
+            # `meta.filename` carries no location, only `path` is real.
+            {
+                "type": "document",
+                "meta": {"filename": "<unknown>"},
+                "path": "/work/docs/Expenses/Foo/2026-07-07 spaced name.pdf",
+            },
+            # A non-document that happens to carry `path` must be left alone.
+            {
+                "type": "custom",
+                "meta": {"filename": "/work/main.beancount"},
+                "path": "/work/not-a-host-file",
+            },
+            {"type": "document", "meta": {}},  # document with no path
+        ],
+        "errors": [
+            {"message": "skipped: /work/docs/Invoices/x y.pdf"},
+            {"message": "nothing to map here"},
+            {"severity": "warning"},  # no message
+        ],
+    }
+    RustledgerComponentEngine._rewrite_guest_paths(result, Path("/host"))
+
+    # Path arithmetic mirrors the implementation so this holds on Windows too.
+    assert result["entries"][0]["path"] == str(
+        Path("/host") / "docs/Expenses/Foo/2026-07-07 spaced name.pdf"
+    )
+    assert result["entries"][1]["meta"]["filename"] == str(
+        Path("/host") / "main.beancount"
+    )
+    # The type gate: `path` is unique to documents today, but a future
+    # directive gaining a `path` that is not a host file must not be rewritten.
+    assert result["entries"][1]["path"] == "/work/not-a-host-file"
+
+    # Messages embed paths mid-string, and a document name may contain spaces,
+    # so the mount prefix is relocated rather than the path parsed out.
+    assert result["errors"][0]["message"] == (
+        f"skipped: {Path('/host')}{os.sep}docs/Invoices/x y.pdf"
+    )
+    assert result["errors"][1]["message"] == "nothing to map here"
+    assert result["errors"][2] == {"severity": "warning"}
+
+
 def test_clamp_accepts_mutated_edge_json(
     engine: RustledgerComponentEngine,
 ) -> None:
@@ -415,3 +491,44 @@ def test_missing_sentinel_is_falsy_singleton() -> None:
     assert Missing() is Missing()
     assert repr(Missing()) == "MISSING"
     assert not Missing()
+
+
+def test_prune_superseded_components(tmp_path: Path) -> None:
+    """Only the current component survives; older ones and the legacy name go.
+
+    The filename carries the pinned version (rustfava#286), so without this
+    every upgrade would leave another ~7 MB artifact behind forever.
+    """
+    current = tmp_path / f"rustledger_ffi_component-{RUSTLEDGER_VERSION}.wasm"
+    older = tmp_path / "rustledger_ffi_component-v0.0.1.wasm"
+    legacy = tmp_path / "rustledger_ffi_component.wasm"
+    unrelated = tmp_path / "keep-me.wasm"
+    for f in (current, older, legacy, unrelated):
+        f.write_bytes(b"\0asm")
+
+    _prune_superseded_components(current)
+
+    assert current.exists()
+    assert unrelated.exists()
+    assert not older.exists()
+    assert not legacy.exists()
+
+
+def test_prune_superseded_components_tolerates_unremovable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A file that cannot be deleted must not break a working engine."""
+    current = tmp_path / f"rustledger_ffi_component-{RUSTLEDGER_VERSION}.wasm"
+    older = tmp_path / "rustledger_ffi_component-v0.0.1.wasm"
+    for f in (current, older):
+        f.write_bytes(b"\0asm")
+
+    denied = "permission denied"
+
+    def _boom(_self: Path, **_kwargs: object) -> None:
+        raise OSError(denied)
+
+    monkeypatch.setattr(Path, "unlink", _boom)
+    _prune_superseded_components(current)  # must not raise
+
+    assert older.exists()
