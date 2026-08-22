@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+from decimal import Decimal
 from difflib import Differ
 from http import HTTPStatus
 from io import BytesIO
@@ -452,9 +453,11 @@ def test_api_get_source_slice_unprocessable(
     This test finds an auto_accounts-generated entry and verifies that
     trying to get its source slice returns 422 (Unprocessable Entity).
     """
-    # Get a generated entry (auto_accounts-generated Open directive). The engine
+    # Get a generated entry (auto_accounts-generated Open directive). The
+    # engine
     # marks synthesized directives with no real source position — a placeholder
-    # filename (starting with "<") and/or a falsy lineno — which is exactly what
+    # filename (starting with "<") and/or a falsy lineno — which is
+    # exactly what
     # rustfava's ``_get_position`` keys on to forbid editing them.
     ledger = app.config["LEDGERS"]["edit-example"]
     generated_entry = None
@@ -464,7 +467,9 @@ def test_api_get_source_slice_unprocessable(
             generated_entry = entry
             break
 
-    assert generated_entry is not None, "No auto_accounts-generated entry found"
+    assert generated_entry is not None, (
+        "No auto_accounts-generated entry found"
+    )
     entry_hash = hash_entry(generated_entry)
 
     response = test_client.get(
@@ -811,7 +816,8 @@ def test_api_query_result_error(test_client: FlaskClient) -> None:
         query_string={"query_string": "nononono"},
     )
     msg = assert_api_error(response)
-    # rustledger ≤0.13 → "Query parse error"; v0.14 → "Query compilation error".
+    # rustledger ≤0.13 → "Query parse error"; v0.14 → "Query compilation
+    # error".
     assert "Query parse error" in msg or "Query compilation error" in msg
 
 
@@ -915,3 +921,97 @@ def test_api_pydantic_validation_error(test_client: FlaskClient) -> None:
     assert response.status_code == HTTPStatus.BAD_REQUEST.value
     assert response.json
     assert "Validation error" in response.json["error"]
+
+
+def test_api_returns_reports_both_metrics(
+    test_client: FlaskClient,
+) -> None:
+    """`/api/returns` reports the scope's flows and both return metrics.
+
+    The decimal fields are raw full-precision strings by design — the client
+    formats them — so they are asserted as strings, not floats.
+    """
+    response = test_client.get(
+        "/long-example/api/returns",
+        query_string={
+            "investments": "Assets:US:ETrade",
+            "income": "Income:US:ETrade",
+            "currency": "USD",
+            "end_date": "2015-01-01",
+        },
+    )
+    data = assert_api_success(response)
+
+    assert data["cash_flows"] > 0
+    for key in ("invested", "distributions", "current_value"):
+        assert isinstance(data[key], str)
+        Decimal(data[key])  # parses as an exact decimal
+    for key in ("money_weighted", "time_weighted"):
+        assert data[key] is None or isinstance(data[key], float)
+
+
+def test_api_returns_parses_the_prefix_lists(
+    test_client: FlaskClient,
+) -> None:
+    """Scope arguments are comma-separated prefixes, stripped of blanks.
+
+    Passing the same scope with surrounding whitespace and a trailing empty
+    element must behave identically to the plain form — otherwise a stray
+    comma would silently widen or void the scope.
+    """
+    plain = test_client.get(
+        "/long-example/api/returns",
+        query_string={
+            "investments": "Assets:US:ETrade",
+            "income": "Income:US:ETrade",
+            "currency": "USD",
+            "end_date": "2015-01-01",
+        },
+    )
+    padded = test_client.get(
+        "/long-example/api/returns",
+        query_string={
+            "investments": "  Assets:US:ETrade , ",
+            "income": " Income:US:ETrade",
+            "currency": "USD",
+            "end_date": "2015-01-01",
+        },
+    )
+    assert assert_api_success(padded) == assert_api_success(plain)
+
+
+def test_api_returns_surfaces_engine_refusal(
+    test_client: FlaskClient,
+) -> None:
+    """An engine refusal reaches the client as its own message.
+
+    The engine is deliberately strict: rather than report a return it cannot
+    stand behind, it names the ledger problem. That message is the useful
+    part, so it must not be flattened into a generic failure.
+    """
+    response = test_client.get(
+        "/long-example/api/returns",
+        query_string={
+            "investments": "Assets:US:ETrade",
+            "income": "Income:US:ETrade",
+            "currency": "USD",
+            "end_date": "not-a-date",
+        },
+    )
+    assert "end-date" in assert_api_error(response)
+
+
+def test_api_returns_refuses_an_unpriceable_scope(
+    test_client: FlaskClient,
+) -> None:
+    """A scope the engine cannot value errors rather than reporting zero."""
+    response = test_client.get(
+        "/long-example/api/returns",
+        query_string={
+            "investments": "Assets:US:ETrade,Assets:US:Vanguard",
+            "income": "Income:US:ETrade",
+            "currency": "USD",
+            "end_date": "2015-01-01",
+        },
+    )
+    assert "price" in assert_api_error(response)

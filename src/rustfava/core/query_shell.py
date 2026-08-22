@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import shlex
 from decimal import Decimal
+from typing import Any
 from typing import TYPE_CHECKING
 
 from rustfava.core.module_base import FavaModule
@@ -81,6 +82,54 @@ class FavaQueryRunner:
         # per-query directive marshaling. Lives here because the shell
         # persists across requests while connections are per-call.
         self._session_cache = SessionCache()
+
+    def returns(
+        self,
+        entries: Sequence[Directive],
+        investments: Sequence[str],
+        income: Sequence[str],
+        currency: str,
+        end_date: str,
+    ) -> dict[str, Any]:
+        """Money- and time-weighted returns over ``entries``.
+
+        Reuses the held-session cache, so this costs no directive marshaling
+        on a filter state the query shell has already visited.
+
+        ``investments`` / ``income`` are account-name *prefixes* scoping the
+        calculation. ``currency`` may be empty to fall back to the ledger's
+        first operating currency. ``end_date`` (``YYYY-MM-DD``) is required —
+        the component has no clock — and is both the horizon and the terminal
+        valuation date.
+
+        The engine refuses to report a number it cannot stand behind: an
+        unpriceable flow, an unresolvable reporting currency or a booking
+        error raises rather than returning a misleading figure. That message
+        is surfaced verbatim, because it names the ledger problem to fix.
+        """
+        conn = connect(
+            "rustledger:",
+            entries=entries,
+            errors=self.ledger.errors,
+            options=self.ledger.options,
+        )
+        session = self._session_cache.get(conn._engine, entries)  # noqa: SLF001
+        if session is None or not hasattr(session, "returns"):
+            msg = (
+                "Returns need the component engine with a held session "
+                "(rustledger with WIT 3.9.0 or newer)."
+            )
+            raise RustfavaAPIError(msg)
+        try:
+            return dict(
+                session.returns(
+                    list(investments), list(income), currency, end_date
+                )
+            )
+        except RustfavaAPIError:
+            raise
+        except Exception as exc:
+            raise RustfavaAPIError(str(exc)) from exc
 
     def run(self, entries: Sequence[Directive], query: str) -> RLCursor | str:
         """Run a query, returning cursor or text result."""
@@ -204,6 +253,27 @@ class QueryShell(FavaModule):
         res = self.runner.run(entries, query)
         return (
             QueryResultText(res) if isinstance(res, str) else _serialise(res)
+        )
+
+    def returns(
+        self,
+        entries: Sequence[Directive],
+        investments: Sequence[str],
+        income: Sequence[str],
+        currency: str,
+        end_date: str,
+    ) -> dict[str, Any]:
+        """Money- and time-weighted returns over ``entries``.
+
+        Delegates to the runner, which owns the held-session cache.
+
+        Raises:
+            RustfavaAPIError: If the engine cannot compute a trustworthy
+                figure — an unpriceable flow, an unresolvable reporting
+                currency, or a booking error.
+        """
+        return self.runner.returns(
+            entries, investments, income, currency, end_date
         )
 
     def query_to_file(

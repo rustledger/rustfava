@@ -26,7 +26,6 @@ from flask import get_template_attribute
 from flask import jsonify
 from flask import request
 from flask_babel import gettext
-from pydantic import BaseModel
 from pydantic import ValidationError as PydanticValidationError
 
 from rustfava.api_models import FormatSourceRequest
@@ -60,6 +59,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from decimal import Decimal
 
     from flask.wrappers import Response
+    from pydantic import BaseModel
 
     from rustfava.beans.abc import Directive
     from rustfava.core.ingest import FileImporters
@@ -120,7 +120,7 @@ def json_success(data: Any) -> Response:
         response.headers["Cache-Control"] = "private, max-age=5"
 
         # Compute ETag from mtime for cache validation
-        etag = hashlib.md5(  # noqa: S324
+        etag = hashlib.md5(
             f"{g.ledger.mtime}".encode(),
             usedforsecurity=False,
         ).hexdigest()
@@ -383,6 +383,61 @@ def get_query(query_string: str) -> QueryResultTable | QueryResultText:
     )
 
 
+@dataclass(frozen=True)
+class ReturnsResult:
+    """Money- and time-weighted returns over a scope of accounts.
+
+    The decimal fields are raw full-precision strings, deliberately not
+    display-formatted — the client formats them for its locale. The two rates
+    are annualized fractions (``0.1`` is 10%) and are ``None`` where the
+    metric is undefined, which is not the same as zero.
+    """
+
+    cash_flows: int
+    invested: str
+    distributions: str
+    current_value: str
+    money_weighted: float | None
+    time_weighted: float | None
+
+
+def _prefixes(value: str) -> list[str]:
+    """Split a comma-separated account-prefix list, dropping blanks."""
+    return [part.strip() for part in value.split(",") if part.strip()]
+
+
+@api_endpoint
+def get_returns(
+    investments: str,
+    income: str,
+    currency: str,
+    end_date: str,
+) -> ReturnsResult:
+    """Money- and time-weighted returns for a scope of investment accounts.
+
+    ``investments`` and ``income`` are comma-separated account-name prefixes.
+    ``currency`` may be empty to use the ledger's first operating currency.
+
+    Runs against ``entries_with_all_prices``: the terminal valuation needs
+    every price the ledger has, not only those surviving the active filter.
+    """
+    raw = g.ledger.query_shell.returns(
+        g.filtered.entries_with_all_prices,
+        _prefixes(investments),
+        _prefixes(income),
+        currency,
+        end_date,
+    )
+    return ReturnsResult(
+        cash_flows=int(raw["cash_flows"]),
+        invested=str(raw["invested"]),
+        distributions=str(raw["distributions"]),
+        current_value=str(raw["current_value"]),
+        money_weighted=raw["money_weighted"],
+        time_weighted=raw["time_weighted"],
+    )
+
+
 @api_endpoint
 def get_extract(filename: str, importer: str) -> Sequence[Any]:
     """Extract entries using the ingest framework."""
@@ -491,13 +546,17 @@ def get_source() -> SourceFile:
 @pydantic_api_endpoint(SaveSourceRequest)
 def put_source(req: SaveSourceRequest) -> str:
     """Write one of the source files and return the updated sha256sum."""
-    return g.ledger.file.set_source(Path(req.file_path), req.source, req.sha256sum)
+    return g.ledger.file.set_source(
+        Path(req.file_path), req.source, req.sha256sum
+    )
 
 
 @pydantic_api_endpoint(SaveEntrySliceRequest)
 def put_source_slice(req: SaveEntrySliceRequest) -> str:
     """Write an entry source slice and return the updated sha256sum."""
-    return g.ledger.file.save_entry_slice(req.entry_hash, req.source, req.sha256sum)
+    return g.ledger.file.save_entry_slice(
+        req.entry_hash, req.source, req.sha256sum
+    )
 
 
 @api_endpoint
