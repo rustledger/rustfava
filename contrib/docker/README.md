@@ -2,7 +2,8 @@
 
 ## Quick Start (Pre-built Image)
 
-The easiest way to run rustfava with Docker is using the pre-built image from GitHub Container Registry:
+The easiest way to run rustfava with Docker is using the pre-built image from
+GitHub Container Registry:
 
 ```bash
 docker run -p 5000:5000 -v /path/to/ledger:/data ghcr.io/rustledger/rustfava /data/main.beancount
@@ -45,11 +46,13 @@ Visit http://localhost:5000 to access rustfava.
 
 ## Advanced Deployment
 
-For production deployments with authentication and HTTPS, see the following sections.
+For production deployments with authentication and HTTPS, see the following
+sections.
 
 ### Reverse Proxy with Authentication
 
-For a secure, authenticated deployment, use a reverse proxy like nginx or Caddy with OAuth2 authentication.
+For a secure, authenticated deployment, use a reverse proxy like nginx or Caddy
+with OAuth2 authentication.
 
 Example with [oauth2-proxy](https://github.com/oauth2-proxy/oauth2-proxy):
 
@@ -74,7 +77,8 @@ docker run --detach --name="rustfava-auth" \
 
 ### HTTPS with Let's Encrypt
 
-For automatic HTTPS certificates, use [Caddy](https://caddyserver.com/) as a reverse proxy:
+For automatic HTTPS certificates, use [Caddy](https://caddyserver.com/) as a
+reverse proxy:
 
 ```yaml
 # docker-compose.yml

@@ -21,11 +21,11 @@ summed up for a range of dates as needed.
 This makes the budgets very flexible, allowing for a monthly budget, being taken
 over by a weekly budget, and so on.
 
-Rustfava displays budgets in both charts and reports. You can find a visualization
-of the global budget in the `Net Profit` and `Expenses` charts for the Income
-Statement report.
+Rustfava displays budgets in both charts and reports. You can find a
+visualization of the global budget in the `Net Profit` and `Expenses` charts for
+the Income Statement report.
 
 The Income Statement report is a good starting point for getting access to the
-full budget information in rustfava. The `Changes` charts visualize the data. The
-`Changes (monthly)` and `Balances (monthly)` reports show, respectively, the
+full budget information in rustfava. The `Changes` charts visualize the data.
+The `Changes (monthly)` and `Balances (monthly)` reports show, respectively, the
 monthly and cumulative (over the selected period) budgets.

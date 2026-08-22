@@ -17,6 +17,15 @@ repos:
         args: ["--wrap", "80"]
         additional_dependencies:
           - mdformat-gfm
+        # docs/api.md carries two indentation-significant mkdocs constructs
+        # mdformat does not understand: a `!!! note` admonition and an
+        # mkdocstrings `::: rustfava.core` block with an indented `options:`
+        # mapping. Reflowing joins their indented bodies onto the marker line,
+        # which turns the identifier into `rustfava.core options:
+        # show_submodules: true` and fails `mkdocs build --strict` with
+        # "Could not collect". Excluded rather than plugin-patched, so the
+        # wrap behaviour of every other file stays unchanged.
+        exclude: ^docs/api\.md$
 
   - repo: https://github.com/biomejs/pre-commit
     rev: v2.3.12

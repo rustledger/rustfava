@@ -1,16 +1,19 @@
 # Syncing with Upstream Fava
 
-rustfava is a fork of [Fava](https://github.com/beancount/fava) that replaces the beancount parser with [rustledger](https://github.com/rustledger/rustledger). This document describes how to sync relevant changes from upstream.
+rustfava is a fork of [Fava](https://github.com/beancount/fava) that replaces
+the beancount parser with
+[rustledger](https://github.com/rustledger/rustledger). This document describes
+how to sync relevant changes from upstream.
 
 ## Background
 
 The fork diverges significantly from upstream in the backend:
 
-| Component | Fava | rustfava |
-|-----------|------|----------|
-| Parser | Python beancount | rustledger (WASM) |
-| Core modules | `fava/core/`, `fava/beans/` | `rustfava/rustledger/` |
-| Package manager | npm | bun |
+| Component       | Fava                        | rustfava               |
+| --------------- | --------------------------- | ---------------------- |
+| Parser          | Python beancount            | rustledger (WASM)      |
+| Core modules    | `fava/core/`, `fava/beans/` | `rustfava/rustledger/` |
+| Package manager | npm                         | bun                    |
 
 The frontend is largely unchanged and can usually accept upstream patches.
 
@@ -96,11 +99,14 @@ git cherry-pick --continue
 
 ### File renames (fava -> rustfava)
 
-Upstream references `src/fava/` but rustfava uses `src/rustfava/`. The cherry-pick usually handles this via directory mapping, but manual fixes may be needed.
+Upstream references `src/fava/` but rustfava uses `src/rustfava/`. The
+cherry-pick usually handles this via directory mapping, but manual fixes may be
+needed.
 
 ### Deleted core files
 
-If upstream modifies files that rustfava deleted (like `core/inventory.py`), skip the commit:
+If upstream modifies files that rustfava deleted (like `core/inventory.py`),
+skip the commit:
 
 ```bash
 git cherry-pick --skip
@@ -109,20 +115,22 @@ git cherry-pick --skip
 ## After Syncing
 
 1. **Run the test suite**: `just test`
-2. **Build the frontend**: `just frontend`
-3. **Manual testing**: Start the app and verify functionality
-4. **Update this doc**: Note the last sync date and any new patterns
+1. **Build the frontend**: `just frontend`
+1. **Manual testing**: Start the app and verify functionality
+1. **Update this doc**: Note the last sync date and any new patterns
 
 ## Sync History
 
-| Date | PR | Commits | Notes |
-|------|-----|---------|-------|
-| 2026-01-25 | #22 | 2 | Extension types, router improvements |
+| Date       | PR  | Commits | Notes                                |
+| ---------- | --- | ------- | ------------------------------------ |
+| 2026-01-25 | #22 | 2       | Extension types, router improvements |
 
 ## Upstream Monitoring
 
 Consider setting up notifications for upstream releases:
 
 1. Watch the [beancount/fava](https://github.com/beancount/fava) repository
-2. Review the [Fava changelog](https://github.com/beancount/fava/blob/main/CHANGELOG.md) periodically
-3. Sync quarterly or when significant features are added
+1. Review the
+   [Fava changelog](https://github.com/beancount/fava/blob/main/CHANGELOG.md)
+   periodically
+1. Sync quarterly or when significant features are added

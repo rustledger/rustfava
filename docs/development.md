@@ -9,7 +9,8 @@ system package manager):
 - [Python 3.13+](https://www.python.org/) - as rustfava is written in Python
 - [Bun](https://bun.sh/) - to build the frontend
 - [just](https://just.systems/) - to run various build / lint / test targets
-- [uv](https://docs.astral.sh/uv/) - to install the development environment and run scripts
+- [uv](https://docs.astral.sh/uv/) - to install the development environment and
+  run scripts
 
 Then this will get you up and running:
 
@@ -21,8 +22,9 @@ cd rustfava
 just dev
 ```
 
-You can start rustfava in the virtual environment as usual by running `rustfava`.
-Running in debug mode with `rustfava --debug` is useful for development.
+You can start rustfava in the virtual environment as usual by running
+`rustfava`. Running in debug mode with `rustfava --debug` is useful for
+development.
 
 You can run the tests with `just test` and the linters by running `just lint`.
 Run `just --list` to see all available recipes. After any changes to the
@@ -34,4 +36,5 @@ the Javascript bundle continuously.
 Contributions are very welcome, just open a PR on
 [GitHub](https://github.com/rustledger/rustfava/pulls).
 
-Rustfava is released under the [MIT License](https://github.com/rustledger/rustfava/blob/main/LICENSE).
+Rustfava is released under the
+[MIT License](https://github.com/rustledger/rustfava/blob/main/LICENSE).

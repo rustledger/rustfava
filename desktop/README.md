@@ -1,6 +1,7 @@
 # rustfava Desktop App
 
-A native desktop application wrapper for rustfava, built with [Tauri](https://tauri.app/).
+A native desktop application wrapper for rustfava, built with
+[Tauri](https://tauri.app/).
 
 ## Features
 
@@ -43,9 +44,11 @@ bun tauri build
 ```
 
 Output locations:
+
 - **Linux deb**: `src-tauri/target/release/bundle/deb/rustfava_*.deb`
 - **Linux rpm**: `src-tauri/target/release/bundle/rpm/rustfava-*.rpm`
-- **Linux AppImage**: `src-tauri/target/release/bundle/appimage/rustfava_*.AppImage`
+- **Linux AppImage**:
+  `src-tauri/target/release/bundle/appimage/rustfava_*.AppImage`
 - **macOS**: `src-tauri/target/release/bundle/macos/rustfava.app`
 - **Windows**: `src-tauri/target/release/bundle/msi/rustfava_*.msi`
 
@@ -54,10 +57,10 @@ Output locations:
 The app uses a "sidecar" pattern:
 
 1. Tauri app launches and shows a file picker
-2. When a file is selected, it spawns the bundled `rustfava-server` binary
-3. The server runs on a random available port
-4. The webview loads the rustfava web UI from localhost
-5. On window close, the server process is terminated
+1. When a file is selected, it spawns the bundled `rustfava-server` binary
+1. The server runs on a random available port
+1. The webview loads the rustfava web UI from localhost
+1. On window close, the server process is terminated
 
 ## Files
 
@@ -79,6 +82,7 @@ git push origin v0.1.0
 Or trigger manually from the Actions tab → "Desktop Release" → "Run workflow".
 
 The workflow builds for:
+
 - **Linux**: `.deb`, `.rpm`, `.AppImage` (x86_64)
 - **macOS**: `.dmg` (x86_64 Intel + ARM64 Apple Silicon)
 - **Windows**: `.msi`, `.exe` installer (x86_64)
@@ -86,13 +90,15 @@ The workflow builds for:
 ### How it works
 
 1. **Build sidecars**: PyInstaller creates platform-specific rustfava binaries
-2. **Build Tauri**: Each platform builds the Tauri app with its sidecar
-3. **Release**: Artifacts are uploaded to a draft GitHub Release
+1. **Build Tauri**: Each platform builds the Tauri app with its sidecar
+1. **Release**: Artifacts are uploaded to a draft GitHub Release
 
 ### Local cross-compilation
 
-You cannot easily cross-compile (e.g., build Windows from Linux). Each platform must be built natively. For local testing:
+You cannot easily cross-compile (e.g., build Windows from Linux). Each platform
+must be built natively. For local testing:
 
 - **Linux**: `nix develop && cd desktop && bun tauri build`
 - **macOS**: Install Xcode, Rust, Bun, then `cd desktop && bun tauri build`
-- **Windows**: Install Visual Studio Build Tools, Rust, Bun, then `cd desktop && bun tauri build`
+- **Windows**: Install Visual Studio Build Tools, Rust, Bun, then
+  `cd desktop && bun tauri build`

@@ -5,9 +5,11 @@
 If you discover a security vulnerability in rustfava, please report it through
 GitHub's private vulnerability reporting:
 
-1. Go to the [Security Advisories](https://github.com/rustledger/rustfava/security/advisories) page
-2. Click "Report a vulnerability"
-3. Provide details about the vulnerability
+1. Go to the
+   [Security Advisories](https://github.com/rustledger/rustfava/security/advisories)
+   page
+1. Click "Report a vulnerability"
+1. Provide details about the vulnerability
 
 We will respond within 48 hours and work with you to address the issue.
 

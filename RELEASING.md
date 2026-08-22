@@ -5,10 +5,11 @@ This document describes the release process for rustfava.
 ## Overview
 
 A release involves:
+
 1. Creating a git tag
-2. Automated builds (desktop apps, PyPI, Docker)
-3. Publishing the release
-4. Updating Nix flake sources
+1. Automated builds (desktop apps, PyPI, Docker)
+1. Publishing the release
+1. Updating Nix flake sources
 
 ## Step-by-Step Process
 
@@ -25,21 +26,22 @@ git push origin v0.1.x
 
 The tag triggers several workflows:
 
-| Workflow | Purpose | Duration |
-|----------|---------|----------|
-| `desktop-release.yml` | Builds desktop apps for all platforms | ~10 min |
-| `build-publish.yml` | Builds and publishes to PyPI, Docker, COPR | ~60 min |
+| Workflow              | Purpose                                    | Duration |
+| --------------------- | ------------------------------------------ | -------- |
+| `desktop-release.yml` | Builds desktop apps for all platforms      | ~10 min  |
+| `build-publish.yml`   | Builds and publishes to PyPI, Docker, COPR | ~60 min  |
 
 Monitor at: https://github.com/rustledger/rustfava/actions
 
 ### 3. PyPI deployment
 
-Publishes automatically when the `build-publish.yml` workflow reaches the
-`pypi` job — no manual approval is configured (verified during v1.31.0).
+Publishes automatically when the `build-publish.yml` workflow reaches the `pypi`
+job — no manual approval is configured (verified during v1.31.0).
 
 ### 4. Publish the GitHub release
 
 Once `desktop-release.yml` completes, it creates a **draft release** with:
+
 - `.AppImage` (Linux)
 - `.deb`, `.rpm` (Linux packages)
 - `.dmg` (macOS)
@@ -47,6 +49,7 @@ Once `desktop-release.yml` completes, it creates a **draft release** with:
 - `.tar.gz` (Linux tarball for Nix)
 
 Publish it:
+
 ```bash
 gh release edit v0.1.x --draft=false
 ```
@@ -58,9 +61,10 @@ Or via GitHub UI: https://github.com/rustledger/rustfava/releases
 The `update-flake-sources.yml` workflow fires when a tag-triggered
 `Desktop Release` run completes (it can also be run manually via
 `gh workflow run update-flake-sources.yml -f version=vX.Y.Z`). It:
+
 1. Downloads release tarballs
-2. Computes SRI hashes
-3. Creates a PR updating `desktop-sources.json`
+1. Computes SRI hashes
+1. Creates a PR updating `desktop-sources.json`
 
 Merge the PR when it passes CI.
 
@@ -85,24 +89,29 @@ docker pull ghcr.io/rustledger/rustfava:0.1.x
 
 ## Release Artifacts
 
-| Artifact | Source | Distribution |
-|----------|--------|--------------|
-| Desktop apps | `desktop-release.yml` | GitHub Releases |
-| Python package | `build-publish.yml` | PyPI |
-| Docker image | `build-publish.yml` | GHCR |
-| Nix flake | `flake.nix` + `desktop-sources.json` | GitHub |
+| Artifact       | Source                               | Distribution    |
+| -------------- | ------------------------------------ | --------------- |
+| Desktop apps   | `desktop-release.yml`                | GitHub Releases |
+| Python package | `build-publish.yml`                  | PyPI            |
+| Docker image   | `build-publish.yml`                  | GHCR            |
+| Nix flake      | `flake.nix` + `desktop-sources.json` | GitHub          |
 
 ## Troubleshooting
 
 ### Draft release not created
-Check that `desktop-release.yml` completed successfully. The release job only runs on tags.
+
+Check that `desktop-release.yml` completed successfully. The release job only
+runs on tags.
 
 ### Nix flake sources not updated
-The `update-flake-sources.yml` workflow triggers when the tag's `Desktop
-Release` run completes successfully. If it didn't fire, dispatch it manually:
-`gh workflow run update-flake-sources.yml -f version=vX.Y.Z`.
+
+The `update-flake-sources.yml` workflow triggers when the tag's
+`Desktop Release` run completes successfully. If it didn't fire, dispatch it
+manually: `gh workflow run update-flake-sources.yml -f version=vX.Y.Z`.
 
 ### PyPI publish failed
+
 Check the workflow logs. Common issues:
+
 - Version already exists on PyPI (can't overwrite)
 - Missing approval for the `pypi` environment

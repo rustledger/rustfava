@@ -1,7 +1,8 @@
 # Import
 
-Rustfava can use Beancount's import system to semi-automatically import entries into
-your ledger. See [Importing External Data in Beancount](http://furius.ca/beancount/doc/ingest)
+Rustfava can use Beancount's import system to semi-automatically import entries
+into your ledger. See
+[Importing External Data in Beancount](http://furius.ca/beancount/doc/ingest)
 for more information on how to write importers.
 
 **Note**: Import functionality requires the beancount compatibility package.
@@ -12,8 +13,8 @@ variable `HOOKS` with a list of hooks to apply to the list of
 `(filename: str, entries: list[Directive])` tuples. If you want to use
 beangulp-style hooks that take lists of
 `(filename: str, entries: list[Directive], account: str, importer: Importer)`-tuples,
-you can annotate them with the appropriate Python types which rustfava will detect
-and call with these 4-tuples.
+you can annotate them with the appropriate Python types which rustfava will
+detect and call with these 4-tuples.
 
 Set the `import-config` option to point to your import config and set
 `import-dirs` to the directories that contain the files that you want to import.
