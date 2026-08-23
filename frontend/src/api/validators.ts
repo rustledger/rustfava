@@ -16,6 +16,26 @@ import {
 } from "../lib/validation.ts";
 import { Inventory } from "../reports/query/query_table.ts";
 
+/**
+ * Money- and time-weighted returns over a scope of investment accounts.
+ *
+ * The decimal fields arrive as raw full-precision strings and are NOT
+ * display-formatted — the engine leaves formatting to the host so no precision
+ * is lost in transit. The two rates are annualized fractions (0.1 is 10%) and
+ * are null where the metric is undefined, which is not the same as zero.
+ */
+export const returns_validator = object({
+  cash_flows: number,
+  invested: string,
+  distributions: string,
+  current_value: string,
+  money_weighted: optional(number),
+  time_weighted: optional(number),
+});
+
+/** The result of a returns calculation. */
+export type ReturnsResult = ValidationT<typeof returns_validator>;
+
 /** A Beancount error that should be shown to the user in the list of errors. */
 export interface BeancountError {
   readonly type: string;
