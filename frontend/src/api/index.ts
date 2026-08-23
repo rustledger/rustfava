@@ -24,6 +24,7 @@ import {
   importable_files_validator,
   ledgerDataValidator,
   options_validator,
+  returns_validator,
   source_validator,
   type SourceFile,
   statistics_validator,
@@ -64,6 +65,7 @@ type GetEndpoint =
   | "narration_transaction"
   | "narrations"
   | "query"
+  | "returns"
   | "source"
   | "statistics";
 type PutEndpoint =
@@ -82,11 +84,15 @@ type ApiParams = Partial<{
   a: string;
   account: string;
   conversion: string;
+  currency: string;
+  end_date: string;
   entry_hash: string;
   filename: string;
   filter: string;
   importer: string;
+  income: string;
   interval: string;
+  investments: string;
   narration: string;
   order: "asc" | "desc";
   page: number;
@@ -232,6 +238,12 @@ export const get_balance_sheet = define_endpoint(
   filters_conversion_interval,
 );
 export const get_changed = define_paramless_endpoint("changed", boolean);
+export const get_returns = define_endpoint("returns", returns_validator, [
+  "investments",
+  "income",
+  "currency",
+  "end_date",
+]);
 export const get_commodities = define_endpoint(
   "commodities",
   commodities_validator,

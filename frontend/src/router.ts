@@ -46,8 +46,12 @@ type FavaQueryParameters =
   | "account"
   | "charts"
   | "conversion"
+  | "currency"
+  | "end_date"
   | "filter"
+  | "income"
   | "interval"
+  | "investments"
   | "query_string"
   | "time";
 
@@ -344,8 +348,12 @@ export class Router {
     key:
       | "account"
       | "conversion"
+      | "currency"
+      | "end_date"
       | "filter"
+      | "income"
       | "interval"
+      | "investments"
       | "query_string"
       | "time",
     value: string,

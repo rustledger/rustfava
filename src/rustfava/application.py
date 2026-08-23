@@ -1,6 +1,7 @@
 """rustfava's main WSGI application.
 
-you can use `create_app` to create a rustfava WSGI app for a given list of files.
+you can use `create_app` to create a rustfava WSGI app for a given list of
+files.
 To start a simple server::
 
     from rustfava.application import create_app
@@ -17,7 +18,7 @@ import logging
 import mimetypes
 from datetime import date
 from datetime import datetime
-from datetime import timezone
+from datetime import UTC
 from functools import lru_cache
 from io import BytesIO
 from pathlib import Path
@@ -84,6 +85,7 @@ CLIENT_SIDE_REPORTS = [
     "income_statement",
     "options",
     "query",
+    "returns",
     "statistics",
     "trial_balance",
 ]
@@ -419,7 +421,7 @@ def _setup_routes(fava_app: Flask) -> None:  # noqa: PLR0915
     @fava_app.route("/<bfile>/download-journal/")
     def download_journal() -> Response:
         """Download a Journal file."""
-        now = datetime.now(tz=timezone.utc).replace(microsecond=0)
+        now = datetime.now(tz=UTC).replace(microsecond=0)
         filename = f"journal_{now.isoformat()}.beancount"
         data = BytesIO(bytes(render_template("beancount_file"), "utf8"))
         return send_file(data, as_attachment=True, download_name=filename)
@@ -427,18 +429,24 @@ def _setup_routes(fava_app: Flask) -> None:  # noqa: PLR0915
     @fava_app.route("/<bfile>/help/", defaults={"page_slug": "_index"})
     @fava_app.route("/<bfile>/help/<page_slug>")
     def help_page(page_slug: str) -> str:
-        """rustfava's included documentation."""
+        """Rustfava's included documentation."""
         from markdown2 import markdown
 
         from rustfava import __version__ as rustfava_version
 
-        # Validate against whitelist (defense-in-depth: also check for path traversal)
-        if page_slug not in HELP_PAGES or "/" in page_slug or "\\" in page_slug:
+        # Validate against whitelist (defense-in-depth: also check for
+        # path traversal)
+        if (
+            page_slug not in HELP_PAGES
+            or "/" in page_slug
+            or "\\" in page_slug
+        ):
             return abort(404)
         help_dir = (Path(__file__).parent / "help").resolve()
         help_path = (help_dir / (page_slug + ".md")).resolve()
         # Ensure resolved path is within help directory
-        # Note: With whitelist check above, this is unreachable (defense-in-depth)
+        # Note: With whitelist check above, this is unreachable
+        # (defense-in-depth)
         if not help_path.is_relative_to(help_dir):  # pragma: no cover
             return abort(404)
         contents = help_path.read_text(encoding="utf-8")

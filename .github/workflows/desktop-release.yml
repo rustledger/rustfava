@@ -416,6 +416,34 @@ jobs:
           tauriScript: bun tauri
           args: --target ${{ matrix.target }}
 
+      - name: Strip over-bundled libraries from the AppImage
+        if: runner.os == 'Linux'
+        shell: bash
+        # tauri#15665: linuxdeploy sweeps libwayland-client and the glib/gst
+        # family into the AppDir, and on a host with newer Mesa the system EGL
+        # driver loses to the bundled libwayland — eglGetDisplay() returns
+        # EGL_BAD_PARAMETER and WebKitWebProcess aborts with no window and no
+        # useful error. Reported as #285 on Fedora 44.
+        #
+        # Upstream has no config surface for excluding libraries, so
+        # post-processing is the only avenue; see the script for details.
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq desktop-file-utils
+          curl -fsSL -o /usr/local/bin/appimagetool \
+            https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x /usr/local/bin/appimagetool
+          shopt -s nullglob
+          images=(desktop/src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage)
+          if [ ${#images[@]} -eq 0 ]; then
+            echo "::error::no AppImage was produced for ${{ matrix.target }}"
+            exit 1
+          fi
+          for image in "${images[@]}"; do
+            contrib/strip-appimage-libs.sh "$image"
+          done
+
       - name: Smoke test (macOS)
         if: runner.os == 'macOS'
         run: |
