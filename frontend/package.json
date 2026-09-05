@@ -78,6 +78,6 @@
     "d3-time": "^3.1.0",
     "d3-time-format": "^4.1.0",
     "svelte": "^5.56.3",
-    "web-tree-sitter": "^0.26.9"
+    "web-tree-sitter": "^0.27.0"
   }
 }
