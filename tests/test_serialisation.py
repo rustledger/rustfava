@@ -126,10 +126,8 @@ def test_serialise_entry_types(
             None,
         ),
         ("100 USD", None, "11 EUR", "100 USD @ 11 EUR", None),
-        # Note: CostSpec with all MISSING values is beancount-specific behavior
-        # that doesn't apply to rustledger. When all values are MISSING, rustledger
-        # treats it as no cost. Removed test case:
-        # ("100 USD", CostSpec(MISSING, ...), "100 USD {}", ...)
+        # A CostSpec whose values are all MISSING is beancount-specific:
+        # rustledger treats it as no cost, so that case is not tested here.
     ],
 )
 def test_serialise_posting(
@@ -162,8 +160,9 @@ def test_serialise_posting(
         (("-140 USD", None, None), "-1400 / 10 USD", None),
         (("10 USD", None, "1 EUR"), "10 USD @@ 10 EUR", None),
         (
-            # Precision matches rustledger's calculation of 10/7
-            ("7 USD", None, "1.4285714285714285714285714286 EUR"),
+            # 10/7 as Python's decimal divides it (28 significant digits),
+            # which rustledger matches from 0.25.0 (rustledger#2652).
+            ("7 USD", None, "1.428571428571428571428571429 EUR"),
             "7 USD @@ 10 EUR",
             None,
         ),
