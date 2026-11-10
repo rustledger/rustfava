@@ -18,6 +18,7 @@ try:
 except PackageNotFoundError:
     _RUSTFAVA_PACKAGE_INSTALLED = False
 
+from rustfava.application import _slug  # noqa: PLC2701 - unit under test
 from rustfava.application import create_app
 from rustfava.application import static_url
 from rustfava.beans import create
@@ -379,3 +380,40 @@ def test_gzip_compression(test_client: FlaskClient) -> None:
         # Verify we can decompress it
         decompressed = gzip.decompress(response.data)
         assert len(decompressed) > len(response.data)
+
+# -- ledger slug ----------------------------------------------------------------
+
+
+class _SlugLedger:
+    """Only the two attributes _slug reads."""
+
+    def __init__(self, title: str, path: str) -> None:
+        self.options = {"title": title}
+        self.beancount_file_path = path
+
+
+def test_slug_uses_ascii_filename(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An ASCII file name wins over a non-ASCII title.
+
+    Otherwise every URL carries raw percent-encoded bytes for such a title,
+    which is easy to mistype and breaks hand-copied deep links.
+    """
+    monkeypatch.delenv("RUSTFAVA_SLUG", raising=False)
+    ledger = _SlugLedger("Example", "ledger/main.beancount")
+    assert _slug(ledger) == "main"  # type: ignore[arg-type]
+
+
+def test_slug_honours_explicit_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    """RUSTFAVA_SLUG lets a deployment pin a stable URL."""
+    monkeypatch.setenv("RUSTFAVA_SLUG", "Books")
+    ledger = _SlugLedger("Some title", "ledger/main.beancount")
+    assert _slug(ledger) == "books"  # type: ignore[arg-type]
+
+
+def test_slug_falls_back_to_title(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Without an ASCII file name the previous behaviour is kept."""
+    monkeypatch.delenv("RUSTFAVA_SLUG", raising=False)
+    ledger = _SlugLedger("Books", "ledger/ledger.beancount")
+    assert _slug(ledger) == "ledger"  # type: ignore[arg-type]
+    non_ascii = _SlugLedger("Books", "ledger/\u5e10\u672c.beancount")
+    assert _slug(non_ascii) == "books"  # type: ignore[arg-type]
