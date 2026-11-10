@@ -103,7 +103,24 @@ if not mimetypes.types_map.get(".js", "").endswith(
 
 
 def _slug(ledger: RustfavaLedger) -> str:
-    """Slug for a ledger."""
+    """Slug for a ledger.
+
+    Prefer an explicit RUSTFAVA_SLUG override, then an ASCII slug derived from
+    the ledger file name, and only then the (possibly non-ASCII) title.
+
+    Deriving the slug from the title puts raw percent-encoded bytes in every
+    URL when the title is not ASCII (a Chinese company name gives
+    /%E6%9D%AD%E5%B7%9E.../ on every page), which is easy to mistype and breaks
+    hand-copied deep links. The title is still used for display.
+    """
+    import os
+
+    override = os.environ.get("RUSTFAVA_SLUG")
+    if override:
+        return slugify(override)
+    file_slug = slugify(Path(ledger.beancount_file_path).stem)
+    if file_slug and file_slug.isascii():
+        return file_slug
     title_slug = slugify(ledger.options["title"])
     return title_slug or slugify(ledger.beancount_file_path)
 
