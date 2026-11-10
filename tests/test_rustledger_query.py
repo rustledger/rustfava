@@ -200,6 +200,30 @@ def test_inventory_mixed_currencies_and_lots() -> None:
     }
 
 
+_DECIMAL_COL = {"name": "number", "datatype": "Decimal"}
+
+
+def test_decimal_column_unwraps_struct_payload() -> None:
+    """The engine ships a Decimal cell as a struct, not a bare string.
+
+    The payload looks like {"number": "8000.00"}. Only the bare-string form
+    was unwrapped before, so the dict leaked into the JSON response. The
+    frontend requires a plain number for Decimal columns and rejects the whole
+    response otherwise (:Validation of primitive number failed: inside the
+    :table: tagged union), which blanks the page.
+    """
+    assert _convert_row_value({"number": "8000.00"}, _DECIMAL_COL) == Decimal(
+        "8000.00"
+    )
+    assert _convert_row_value("8000.00", _DECIMAL_COL) == Decimal("8000.00")
+
+
+def test_decimal_column_passes_through_other_shapes() -> None:
+    """Shapes we do not understand must be returned unchanged, not raise."""
+    assert _convert_row_value(None, _DECIMAL_COL) is None
+    assert _convert_row_value(Decimal("1.5"), _DECIMAL_COL) == Decimal("1.5")
+
+
 # -- cursor / conversion / connection unit coverage ---------------------------
 
 _AMOUNT_COL = {"name": "market_value", "datatype": "Amount"}

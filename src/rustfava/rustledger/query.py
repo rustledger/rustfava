@@ -146,8 +146,18 @@ def _convert_row_value(value: Any, column: dict[str, str]) -> Any:
 
     datatype = column.get("datatype", "object")
 
-    if datatype == "Decimal" and isinstance(value, str):
-        return Decimal(value)
+    if datatype == "Decimal":
+        # The engine ships a Decimal cell as {"number": "<decimal string>"},
+        # i.e. a struct payload rather than a bare string. Handling only the
+        # string form let the dict reach the JSON response; the frontend
+        # requires a plain number for Decimal columns and rejects the whole
+        # response otherwise ("Validation of primitive number failed" inside
+        # the "table" tagged union), blanking the page.
+        if isinstance(value, str):
+            return Decimal(value)
+        if isinstance(value, dict) and "number" in value:
+            return Decimal(str(value["number"]))
+        return value
     if datatype == "Amount" and isinstance(value, dict):
         # The engine sometimes declares Amount but ships an Inventory-shaped
         # payload ({"positions": [...]}) — e.g. value(sum(position)) when the
