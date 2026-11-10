@@ -91,7 +91,10 @@ def _frontend_queries() -> list[str]:
     """
     queries: list[str] = []
     for source in sorted(_FRONTEND_REPORTS.glob("*/index.ts")):
-        text = source.read_text()
+        # Read as UTF-8 explicitly: the locale default is not UTF-8 on many
+        # Windows setups (e.g. GBK on a Chinese system), where decoding a
+        # frontend source that contains non-ASCII characters raises.
+        text = source.read_text(encoding="utf-8")
         candidates = re.findall(r"`([^`]+)`", text, flags=re.DOTALL)
         candidates += re.findall(r'"((?:[^"\\]|\\.)+)"', text)
         # Only strings that ARE a query (anchored SELECT): plain substring
