@@ -8,6 +8,7 @@ from operator import attrgetter
 from typing import TYPE_CHECKING
 
 from rustfava.beans.abc import Open
+from rustfava import account_display
 from rustfava.beans.account import parent as account_parent
 from rustfava.context import g
 from rustfava.core.conversion import AT_COST
@@ -39,6 +40,28 @@ class SerialisedTreeNode:
     has_txns: bool
     cost: SimpleCounterInventory | None = None
     cost_children: SimpleCounterInventory | None = None
+
+
+def _fold_duplicate_level(
+    children: list[SerialisedTreeNode],
+    shown: str,
+) -> list[SerialisedTreeNode]:
+    """Drop nested rows whose display name repeats the parent one.
+
+    tree.cap() prepends the equity root to an already rooted account
+    (Equity -> Equity:Equity:Earnings:Current). Since the child now renders with
+    the same display name as its parent, keep its children instead of nesting a
+    duplicate row.
+    """
+    if not any(child.account == shown for child in children):
+        return children
+    hoisted: list[SerialisedTreeNode] = []
+    for child in children:
+        if child.account == shown:
+            hoisted.extend(child.children)
+        else:
+            hoisted.append(child)
+    return sorted(hoisted, key=attrgetter('account'))
 
 
 class TreeNode:
@@ -78,9 +101,11 @@ class TreeNode:
             child.serialise(conversion, prices, end, with_cost=with_cost)
             for child in sorted(self.children, key=attrgetter("name"))
         ]
+        shown = account_display.display(self.name)
+        children = _fold_duplicate_level(children, shown)
         return (
             SerialisedTreeNode(
-                self.name,
+                account_display.display(self.name),
                 conversion.apply(self.balance, prices, end),
                 conversion.apply(self.balance_children, prices, end),
                 children,
@@ -90,7 +115,7 @@ class TreeNode:
             )
             if with_cost
             else SerialisedTreeNode(
-                self.name,
+                account_display.display(self.name),
                 conversion.apply(self.balance, prices, end),
                 conversion.apply(self.balance_children, prices, end),
                 children,

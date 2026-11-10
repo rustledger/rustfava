@@ -14,6 +14,7 @@ from flask import current_app
 from flask import url_for
 from flask_babel import gettext
 
+from rustfava import account_display
 from rustfava.context import g
 from rustfava.util.excel import HAVE_EXCEL
 
@@ -89,11 +90,15 @@ def _get_options() -> dict[str, str | Sequence[str]]:
         "include": options["include"],
         "operating_currency": options["operating_currency"],
         "title": options["title"],
-        "name_assets": options["name_assets"],
-        "name_liabilities": options["name_liabilities"],
-        "name_equity": options["name_equity"],
-        "name_income": options["name_income"],
-        "name_expenses": options["name_expenses"],
+        # NGZR fork: chart legends in the balance sheet read these, so expose
+        # the Chinese root names (ledger options themselves stay untouched).
+        "name_assets": account_display.display(options["name_assets"]),
+        "name_liabilities": account_display.display(
+            options["name_liabilities"]
+        ),
+        "name_equity": account_display.display(options["name_equity"]),
+        "name_income": account_display.display(options["name_income"]),
+        "name_expenses": account_display.display(options["name_expenses"]),
     }
 
 
@@ -102,9 +107,20 @@ def get_ledger_data() -> LedgerData:
     ledger = g.ledger
     all_queries = ledger.all_entries_by_type.Query
 
+    # NGZR fork: expose Chinese display names to the frontend (keys of
+    # account_details must match, since the frontend looks accounts up there).
+    display_accounts = [
+        account_display.display(account)
+        for account in ledger.attributes.accounts
+    ]
+    display_details = {
+        account_display.display(account): data
+        for account, data in ledger.accounts.items()
+    }
+
     return LedgerData(
-        ledger.attributes.accounts,
-        ledger.accounts,
+        display_accounts,
+        display_details,
         url_for("index"),
         ledger.attributes.currencies,
         ledger.commodities.names,

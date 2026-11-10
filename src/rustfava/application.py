@@ -44,6 +44,7 @@ from markupsafe import Markup
 from werkzeug.utils import secure_filename
 
 from rustfava import LOCALES
+from rustfava import account_display
 from rustfava import template_filters
 from rustfava._ctx_globals_class import Context
 from rustfava.beans import funcs
@@ -246,6 +247,10 @@ def _setup_template_config(fava_app: Flask, *, incognito: bool) -> None:
     fava_app.add_template_global(url_for, "url_for")
     fava_app.add_template_global(translations, "translations")
     fava_app.add_template_global(get_ledger_data, "get_ledger_data")
+    fava_app.add_template_global(
+        account_display.display,
+        "account_display_name",
+    )
 
     @fava_app.context_processor
     def _template_context() -> dict[str, RustfavaLedger | type[ChartApi]]:
@@ -332,6 +337,8 @@ def _setup_routes(fava_app: Flask) -> None:  # noqa: PLR0915
     @fava_app.route("/<bfile>/account/<name>/")
     def account(name: str) -> str:  # noqa: ARG001
         """Get the account report."""
+        # Accept a display name in the URL as well as the real account name.
+        account_display.resolve(name)
         return render_template("_layout.html", content="")
 
     @fava_app.route("/<bfile>/document/", methods=["GET"])

@@ -1,5 +1,5 @@
 {% macro account_name(ledger, account_name) -%}
 <a href="{{ url_for('account', name=account_name) }}" class="account">
-  {{- account_name -}}
+  {{- account_display_name(account_name) -}}
 </a>
 {%- endmacro %}

@@ -21,6 +21,7 @@ from rustfava.beans.abc import Transaction
 from rustfava.beans.account import account_tester
 from rustfava.beans.flags import FLAG_UNREALIZED
 from rustfava.beans.helpers import slice_entry_dates
+from rustfava import account_display
 from rustfava.core.conversion import conversion_from_str
 from rustfava.core.inventory import CounterInventory
 from rustfava.core.module_base import FavaModule
@@ -174,8 +175,11 @@ class ChartModule(FavaModule):
                 prices,
                 date_range.end_inclusive,
             )
+            # The stacked-bar tooltip (and the links it contains) uses these
+            # keys, so they carry display names like the rest of the UI; links
+            # resolve them back through the account route.
             account_balances = {
-                account: conv.apply(
+                account_display.display(account): conv.apply(
                     acct_value,
                     prices,
                     date_range.end_inclusive,
