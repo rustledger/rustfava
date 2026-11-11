@@ -18,6 +18,7 @@ from decimal import InvalidOperation
 from functools import singledispatch
 from typing import Any
 
+from rustfava import account_display
 from rustfava.beans import create
 from rustfava.beans.load import load_string
 from rustfava.beans.abc import Balance
@@ -80,6 +81,9 @@ def serialise(entry: Directive | Posting) -> Any:
     ret["meta"] = _clean_meta(ret.get("meta", {}))
     ret["entry_hash"] = hash_entry(entry)
     ret["t"] = _get_entry_type_name(entry)
+    # NGZR fork: Open/Close/Document/Note/Pad entries carry a single account.
+    if isinstance(ret.get("account"), str):
+        ret["account"] = account_display.display(ret["account"])
     return ret
 
 
@@ -133,7 +137,10 @@ def _(posting: Posting) -> Any:
     if posting.price is not None:
         position_str += f" @ {to_string(posting.price)}"
 
-    ret: dict[str, Any] = {"account": posting.account, "amount": position_str}
+    ret: dict[str, Any] = {
+        "account": account_display.display(posting.account),
+        "amount": position_str,
+    }
     if posting.meta:
         ret["meta"] = copy(posting.meta)
     return ret

@@ -466,8 +466,12 @@ class AccountFilter(EntryFilter):
     __slots__ = ("_match", "_value")
 
     def __init__(self, value: str) -> None:
-        self._value = value
-        self._match = Match(value)
+        # NGZR fork: accept the Chinese display name from the UI and filter on
+        # the real account name (entries are never renamed).
+        from rustfava import account_display  # noqa: PLC0415
+
+        self._value = account_display.resolve(value)
+        self._match = Match(self._value)
 
     def apply(self, entries: Sequence[Directive]) -> Sequence[Directive]:
         value = self._value

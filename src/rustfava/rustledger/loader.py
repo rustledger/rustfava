@@ -267,6 +267,10 @@ def load_string(
         entries, plugin_errors = _run_plugins(entries, plugins, options)
         errors.extend(plugin_errors)
 
+    from rustfava import account_display  # noqa: PLC0415 - avoid import cycle
+
+    account_display.register(entries)
+
     return _sort_entries(entries), errors, options
 
 
@@ -325,5 +329,9 @@ def load_uncached(
     # Set include list and filename in options
     options["include"] = result.get("loaded_files", [str(main_path)])
     options["filename"] = str(main_path)
+
+    from rustfava import account_display  # noqa: PLC0415 - avoid import cycle
+
+    account_display.register(entries)
 
     return entries, errors, options

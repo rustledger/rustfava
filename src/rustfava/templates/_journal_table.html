@@ -17,7 +17,7 @@
 {%- endif -%}
 {% endmacro %}
 
-{% macro _account_link(name) %}<a href='{{ url_for('account', name=name) }}'>{{ name }}</a>{% endmacro %}
+{% macro _account_link(name) %}<a href='{{ url_for('account', name=name) }}'>{{ account_display_name(name) }}</a>{% endmacro %}
 
 {% macro _render_metadata_indicators(metadata) -%}
 {% for key, value in metadata %}

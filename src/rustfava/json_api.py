@@ -28,6 +28,7 @@ from flask import request
 from flask_babel import gettext
 from pydantic import ValidationError as PydanticValidationError
 
+from rustfava import account_display
 from rustfava.api_models import FormatSourceRequest
 from rustfava.api_models import SaveEntrySliceRequest
 from rustfava.api_models import SaveSourceRequest
@@ -896,7 +897,7 @@ def get_account_report() -> AccountReportJournal | AccountReportTree:
     """Get the data for the account report."""
     g.ledger.changed()
 
-    account_name = request.args.get("a", "")
+    account_name = account_display.resolve(request.args.get("a", ""))
     subreport = request.args.get("r")
 
     charts = [
@@ -925,8 +926,11 @@ def get_account_report() -> AccountReportJournal | AccountReportTree:
         ]
         budgets_mod = g.ledger.budgets
         first_date_range = dates[-1]
+        # NGZR fork: the tree nodes the frontend pairs these with carry display
+        # names, so the mapping keys must be display names as well - the
+        # calculation itself still runs on the real account name.
         budgets = {
-            account: [
+            account_display.display(account): [
                 AccountBudget(
                     budgets_mod.calculate(
                         account,
