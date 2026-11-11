@@ -22,7 +22,7 @@
   <Link report="trial_balance" name={_("Trial Balance")} key="g t" />
   <Link report="journal" name={_("Journal")} key="g j" />
   {#each sidebar_links as [label, link] (link)}
-    <Link report={link} name={label} remote />
+    <Link report={link} name={label} />
   {/each}
   <Link report="query" name={_("Query")} key="g q">
     {#if user_queries.length}
