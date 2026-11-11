@@ -616,3 +616,67 @@ msgstr ""
 msgid "Icicle"
 msgstr ""
 
+
+#: frontend/src/reports/returns/index.ts
+msgid "Returns"
+msgstr "投资回报"
+
+#: frontend/src/reports/returns/Returns.svelte
+msgid "n/a"
+msgstr "不适用"
+
+#: frontend/src/reports/returns/Returns.svelte
+msgid "Investment accounts"
+msgstr "投资科目"
+
+#: frontend/src/reports/returns/Returns.svelte
+msgid "Income accounts"
+msgstr "收益科目"
+
+#: frontend/src/reports/returns/Returns.svelte
+msgid "As of"
+msgstr "截止日期"
+
+#: frontend/src/reports/returns/Returns.svelte
+msgid "Calculate"
+msgstr "计算"
+
+#: frontend/src/reports/returns/Returns.svelte
+msgid "Account names are prefixes: everything beneath them is in scope. Leave the currency empty to use the ledger's first operating currency."
+msgstr "科目名按前缀匹配：其下所有子科目都计入。币种留空则使用账本的第一个主币种。"
+
+#: frontend/src/reports/returns/Returns.svelte
+msgid "Returns could not be computed"
+msgstr "无法计算收益"
+
+#: frontend/src/reports/returns/Returns.svelte
+msgid "The engine reports an error rather than a figure it cannot stand behind — fix the ledger issue above and try again."
+msgstr "引擎宁可报错，也不给出它无法负责的数字——请先修正上面的账本问题后重试。"
+
+#: frontend/src/reports/returns/Returns.svelte
+msgid "Invested"
+msgstr "累计投入"
+
+#: frontend/src/reports/returns/Returns.svelte
+msgid "Distributions"
+msgstr "累计分配"
+
+#: frontend/src/reports/returns/Returns.svelte
+msgid "Current value"
+msgstr "当前市值"
+
+#: frontend/src/reports/returns/Returns.svelte
+msgid "Cash flows"
+msgstr "现金流笔数"
+
+#: frontend/src/reports/returns/Returns.svelte
+msgid "Money-weighted return (XIRR)"
+msgstr "资金加权收益率（XIRR）"
+
+#: frontend/src/reports/returns/Returns.svelte
+msgid "Money-weighted return"
+msgstr "资金加权收益率"
+
+#: frontend/src/reports/returns/Returns.svelte
+msgid "Time-weighted return"
+msgstr "时间加权收益率"
