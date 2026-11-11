@@ -1015,3 +1015,30 @@ def test_api_returns_refuses_an_unpriceable_scope(
         },
     )
     assert "price" in assert_api_error(response)
+
+def test_api_etag_reflects_content(test_client: FlaskClient) -> None:
+    """The ETag must depend on the response body, not on ledger.mtime.
+
+    It used to be derived from g.ledger.mtime, which comes from the file
+    watcher and stays 0 whenever the watcher is not running. The validator was
+    therefore constant, so a browser revalidated once and kept rendering a
+    stale ledger (a page could still show data from before a restart).
+    """
+    balance = test_client.get("/long-example/api/balance_sheet")
+    income = test_client.get("/long-example/api/income_statement")
+    etag_balance = balance.headers["ETag"]
+    assert etag_balance != income.headers["ETag"]
+
+    # An outdated validator must not be accepted.
+    stale = test_client.get(
+        "/long-example/api/balance_sheet",
+        headers={"If-None-Match": '"cfcd208495d565ef66e7dff9f98764da"'},
+    )
+    assert stale.status_code == HTTPStatus.OK.value
+
+    # The current validator is still honoured.
+    fresh = test_client.get(
+        "/long-example/api/balance_sheet",
+        headers={"If-None-Match": etag_balance},
+    )
+    assert fresh.status_code == HTTPStatus.NOT_MODIFIED.value

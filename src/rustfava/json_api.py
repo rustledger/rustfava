@@ -119,9 +119,16 @@ def json_success(data: Any) -> Response:
     if request.method == "GET":
         response.headers["Cache-Control"] = "private, max-age=5"
 
-        # Compute ETag from mtime for cache validation
+        # Compute the ETag from the response body.
+        #
+        # It used to be derived from g.ledger.mtime, but that value comes from
+        # the file watcher and stays 0 whenever the watcher is not running,
+        # which made the ETag constant: after the first response a browser
+        # revalidates, receives 304 forever and keeps rendering a stale ledger
+        # (e.g. a page still showing data from before a restart). Hashing the
+        # body is always correct and cheap for these payloads.
         etag = hashlib.md5(
-            f"{g.ledger.mtime}".encode(),
+            response.get_data(),
             usedforsecurity=False,
         ).hexdigest()
         response.headers["ETag"] = f'"{etag}"'
