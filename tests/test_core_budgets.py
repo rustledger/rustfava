@@ -6,6 +6,7 @@ from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
+from rustfava.core.budgets import budget_window
 from rustfava.core.budgets import calculate_budget
 from rustfava.core.budgets import calculate_budget_children
 from rustfava.core.budgets import parse_budgets
@@ -145,3 +146,33 @@ def test_budgets_children(budgets_doc: BudgetDict) -> None:
         date(2017, 1, 2),
     )
     assert budget["USD"] == Decimal("2.00")
+
+def test_budget_window_anchors_on_today() -> None:
+    """The three windows resolve to half-open calendar ranges."""
+    today = date(2024, 3, 15)
+
+    assert budget_window("year", today) == (
+        date(2024, 1, 1),
+        date(2025, 1, 1),
+        "year",
+    )
+    assert budget_window("ytd", today) == (
+        date(2024, 1, 1),
+        date(2024, 3, 16),
+        "ytd",
+    )
+    assert budget_window("month", today) == (
+        date(2024, 3, 1),
+        date(2024, 4, 1),
+        "month",
+    )
+
+
+def test_budget_window_defaults_to_the_year() -> None:
+    """An unknown or missing window falls back to the calendar year."""
+    assert budget_window(None, date(2024, 12, 31)) == (
+        date(2024, 1, 1),
+        date(2025, 1, 1),
+        "year",
+    )
+    assert budget_window("nonsense", date(2024, 6, 1))[2] == "year"
