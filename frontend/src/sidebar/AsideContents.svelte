@@ -16,18 +16,14 @@
   );
 </script>
 
-{#if sidebar_links.length}
-  <ul class="navigation">
-    {#each sidebar_links as [label, link] (link)}
-      <Link report={link} name={label} remote />
-    {/each}
-  </ul>
-{/if}
 <ul class="navigation">
   <Link report="income_statement" name={_("Income Statement")} key="g i" />
   <Link report="balance_sheet" name={_("Balance Sheet")} key="g b" />
   <Link report="trial_balance" name={_("Trial Balance")} key="g t" />
   <Link report="journal" name={_("Journal")} key="g j" />
+  {#each sidebar_links as [label, link] (link)}
+    <Link report={link} name={label} remote />
+  {/each}
   <Link report="query" name={_("Query")} key="g q">
     {#if user_queries.length}
       <ul class="submenu">
