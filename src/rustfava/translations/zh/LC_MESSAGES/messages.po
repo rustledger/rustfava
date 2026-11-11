@@ -616,3 +616,43 @@ msgstr ""
 msgid "Icicle"
 msgstr ""
 
+
+#: src/rustfava/templates/budget.html
+msgid "Budgets"
+msgstr "预算"
+
+#: src/rustfava/templates/budget.html
+msgid "Budgeted"
+msgstr "预算"
+
+#: src/rustfava/templates/budget.html
+msgid "Spent"
+msgstr "已用"
+
+#: src/rustfava/templates/budget.html
+msgid "Remaining"
+msgstr "剩余"
+
+#: src/rustfava/templates/budget.html
+msgid "Used"
+msgstr "使用率"
+
+#: src/rustfava/templates/budget.html
+msgid "Year"
+msgstr "全年"
+
+#: src/rustfava/templates/budget.html
+msgid "Year to date"
+msgstr "至今"
+
+#: src/rustfava/templates/budget.html
+msgid "Month"
+msgstr "本月"
+
+#: src/rustfava/templates/budget.html
+msgid "Accrued per day, so a partial window shows a partial budget."
+msgstr "按日摊算：窗口不满整期时，预算会按比例显示。"
+
+#: src/rustfava/templates/budget.html
+msgid "No budget entries found. Add e.g.:"
+msgstr "未找到预算指令。可以这样添加："

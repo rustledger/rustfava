@@ -49,6 +49,9 @@ from rustfava._ctx_globals_class import Context
 from rustfava.beans import funcs
 from rustfava.context import g
 from rustfava.core import RustfavaLedger
+from rustfava.core.budgets import BUDGET_WINDOWS
+from rustfava.core.budgets import budget_rows
+from rustfava.core.budgets import budget_window
 from rustfava.core.charts import RustfavaJSONProvider
 from rustfava.core.documents import is_document_or_import_file
 from rustfava.help import HELP_PAGES
@@ -425,6 +428,24 @@ def _setup_routes(fava_app: Flask) -> None:  # noqa: PLR0915
         filename = f"journal_{now.isoformat()}.beancount"
         data = BytesIO(bytes(render_template("beancount_file"), "utf8"))
         return send_file(data, as_attachment=True, download_name=filename)
+
+    @fava_app.route("/<bfile>/budget/")
+    def budget_page() -> str:
+        """Show the budgets of the ledger next to actual spending."""
+        begin_date, end_date, window = budget_window(
+            request.args.get("window"),
+            date.today(),
+        )
+        rows, totals = budget_rows(g.ledger, begin_date, end_date)
+        return render_template(
+            "budget.html",
+            window=window,
+            windows=BUDGET_WINDOWS,
+            begin_date=begin_date,
+            end_date=end_date,
+            rows=rows,
+            totals=totals,
+        )
 
     @fava_app.route("/<bfile>/help/", defaults={"page_slug": "_index"})
     @fava_app.route("/<bfile>/help/<page_slug>")

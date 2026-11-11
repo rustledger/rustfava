@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from rustfava.application import CLIENT_SIDE_REPORTS
+from rustfava.core.budgets import BUDGET_WINDOWS
 from rustfava.help import HELP_PAGES
 
 if TYPE_CHECKING:
@@ -125,6 +126,8 @@ def test_all_pages_render(test_client: FlaskClient, ledger: str) -> None:
         f"/{ledger}/holdings/by_{key}/" for key in HOLDINGS_AGGREGATION_KEYS
     ]
     urls += [f"/{ledger}/account/Assets/"]
+    urls += [f"/{ledger}/budget/"]
+    urls += [f"/{ledger}/budget/?window={name}" for name in BUDGET_WINDOWS]
     urls += [f"/{ledger}/help/"]
     urls += [
         # _index's canonical URL is /help/ (covered above); a direct hit 308s

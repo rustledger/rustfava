@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import datetime
 from collections import Counter
 from collections import defaultdict
+from dataclasses import dataclass
 from decimal import Decimal
 from typing import NamedTuple
 from typing import TYPE_CHECKING
@@ -14,7 +16,6 @@ from rustfava.util.date import days_in_daterange
 from rustfava.util.date import INTERVALS
 
 if TYPE_CHECKING:  # pragma: no cover
-    import datetime
     from collections.abc import Mapping
     from collections.abc import Sequence
 
@@ -53,6 +54,11 @@ class BudgetModule(FavaModule):
         self._budget_entries, self.errors = parse_budgets(
             self.ledger.all_entries_by_type.Custom,
         )
+
+    @property
+    def entries(self) -> BudgetDict:
+        """The parsed budget directives, keyed by account."""
+        return self._budget_entries
 
     def calculate(
         self,
@@ -205,3 +211,162 @@ def calculate_budget_children(
                 calculate_budget(budgets, child, date_from, date_to),
             )
     return dict(currency_dict)
+
+@dataclass(frozen=True)
+class BudgetRowData:
+    """One row of the budget overview."""
+
+    account: str
+    depth: int
+    currency: str
+    budgeted: Decimal
+    actual: Decimal
+
+    @property
+    def remaining(self) -> Decimal:
+        """What is left of the budget."""
+        return self.budgeted - self.actual
+
+    @property
+    def used_pct(self) -> Decimal | None:
+        """The share of the budget that has been spent, as a percentage."""
+        if not self.budgeted:
+            return None
+        return (self.actual / self.budgeted * 100).quantize(Decimal("0.1"))
+
+    @property
+    def over_budget(self) -> bool:
+        """Whether more than the budget has been spent."""
+        return self.remaining < 0
+
+
+BUDGET_WINDOWS = ("year", "ytd", "month")
+"""The windows offered by the budget overview."""
+
+
+def budget_window(
+    name: str | None,
+    today: datetime.date,
+) -> tuple[datetime.date, datetime.date, str]:
+    """Resolve a window name to a half-open date range.
+
+    Args:
+        name: One of ``BUDGET_WINDOWS`` (defaults to ``year``).
+        today: The date the window is anchored on.
+
+    Returns:
+        The start (inclusive), the end (exclusive) and the resolved name.
+    """
+    if name == "ytd":
+        return (
+            datetime.date(today.year, 1, 1),
+            today + datetime.timedelta(days=1),
+            "ytd",
+        )
+    if name == "month":
+        begin = datetime.date(today.year, today.month, 1)
+        return (
+            begin,
+            (begin + datetime.timedelta(days=32)).replace(day=1),
+            "month",
+        )
+    return (
+        datetime.date(today.year, 1, 1),
+        datetime.date(today.year + 1, 1, 1),
+        "year",
+    )
+
+
+def budget_rows(
+    ledger: RustfavaLedger,
+    begin_date: datetime.date,
+    end_date: datetime.date,
+) -> tuple[list[BudgetRowData], list[BudgetRowData]]:
+    """Collect the budget overview rows and the totals.
+
+    Every account carrying a budget gets a row with its children-inclusive
+    budget (the same value as ``calculate_children``) next to the spending
+    booked in that account and its subaccounts within the window.
+
+    Args:
+        ledger: The ledger.
+        begin_date: Start of the window (inclusive).
+        end_date: End of the window (exclusive).
+
+    Returns:
+        The rows and the total rows. Only accounts without a budgeted
+        ancestor are summed, so nothing is counted twice.
+    """
+    budgets = ledger.budgets
+    accounts = sorted(budgets.entries)
+
+    spending: dict[tuple[str, str], Decimal] = defaultdict(Decimal)
+    for entry in ledger.all_entries:
+        if not begin_date <= entry.date < end_date:
+            continue
+        for posting in getattr(entry, "postings", ()):
+            units = posting.units
+            if units is None:  # pragma: no cover
+                continue
+            spending[(posting.account, units.currency)] += units.number
+
+    def actual_for(account: str, currency: str) -> Decimal:
+        prefix = account + ":"
+        return sum(
+            (
+                value
+                for (posting_account, posting_currency), value in spending.items()
+                if posting_currency == currency
+                and (
+                    posting_account == account
+                    or posting_account.startswith(prefix)
+                )
+            ),
+            Decimal(0),
+        )
+
+    def rows_for(account: str) -> list[BudgetRowData]:
+        depth = account.count(":")
+        return [
+            BudgetRowData(
+                account,
+                depth,
+                currency,
+                budget,
+                actual_for(account, currency),
+            )
+            for currency, budget in sorted(
+                budgets.calculate_children(account, begin_date, end_date).items(),
+            )
+        ]
+
+    rows = [row for account in accounts for row in rows_for(account)]
+
+    # Only accounts without a budgeted ancestor are summed into the total, so a
+    # budgeted parent and its budgeted child are not counted twice.
+    aggregated: dict[str, tuple[Decimal, Decimal]] = {}
+    for account in accounts:
+        if any(
+            other != account and account.startswith(other + ":")
+            for other in accounts
+        ):
+            continue
+        for currency, budget in budgets.calculate_children(
+            account,
+            begin_date,
+            end_date,
+        ).items():
+            budgeted, actual = aggregated.get(
+                currency,
+                (Decimal(0), Decimal(0)),
+            )
+            aggregated[currency] = (
+                budgeted + budget,
+                actual + actual_for(account, currency),
+            )
+
+    totals = [
+        BudgetRowData("", 0, currency, budgeted, actual)
+        for currency, (budgeted, actual) in sorted(aggregated.items())
+    ]
+    return rows, totals

@@ -1,0 +1,103 @@
+{% extends "_layout.html" %}
+
+{% set page_title = _('Budgets') %}
+
+{% block content %}
+<div class="budget">
+  <div class="budget-head">
+    <h2>{{ _("Budgets") }}</h2>
+    <div class="budget-windows">
+      {% for name in windows %}
+        <a href="{{ url_for("budget_page", window=name) }}"
+           {% if name == window %}class="selected"{% endif %}>
+          {{ {"year": _("Year"), "ytd": _("Year to date"), "month": _("Month")}[name] }}
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+  <p class="budget-period">
+    {{ begin_date }} &rarr; {{ end_date }}
+    <span class="budget-hint">{{ _("Accrued per day, so a partial window shows a partial budget.") }}</span>
+  </p>
+
+  {% if rows %}
+  <table class="budget-table">
+    <thead>
+      <tr>
+        <th class="account">{{ _("Account") }}</th>
+        <th>{{ _("Currency") }}</th>
+        <th class="num">{{ _("Budgeted") }}</th>
+        <th class="num">{{ _("Spent") }}</th>
+        <th class="num">{{ _("Remaining") }}</th>
+        <th class="used">{{ _("Used") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for row in rows %}
+      <tr{% if row.over_budget %} class="over"{% endif %}>
+        <td class="account" style="padding-left: {{ 0.4 + row.depth * 1.2 }}rem">{{ row.account }}</td>
+        <td>{{ row.currency }}</td>
+        <td class="num">{{ "%.2f"|format(row.budgeted) }}</td>
+        <td class="num">{{ "%.2f"|format(row.actual) }}</td>
+        <td class="num{% if row.over_budget %} negative{% endif %}">{{ "%.2f"|format(row.remaining) }}</td>
+        <td class="used">
+          {% if row.used_pct is not none %}
+          <div class="bar"><span style="width: {{ [row.used_pct, 100]|min }}%"></span></div>
+          <span class="pct">{{ row.used_pct }}%</span>
+          {% else %}<span class="pct">n/a</span>{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+    {% if totals %}
+    <tfoot>
+    {% for row in totals %}
+      <tr class="grand{% if row.over_budget %} over{% endif %}">
+        <td class="account">{{ _("Total") }}</td>
+        <td>{{ row.currency }}</td>
+        <td class="num">{{ "%.2f"|format(row.budgeted) }}</td>
+        <td class="num">{{ "%.2f"|format(row.actual) }}</td>
+        <td class="num{% if row.over_budget %} negative{% endif %}">{{ "%.2f"|format(row.remaining) }}</td>
+        <td class="used">
+          {% if row.used_pct is not none %}
+          <div class="bar"><span style="width: {{ [row.used_pct, 100]|min }}%"></span></div>
+          <span class="pct">{{ row.used_pct }}%</span>
+          {% else %}<span class="pct">n/a</span>{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tfoot>
+    {% endif %}
+  </table>
+  {% else %}
+  <p class="budget-empty">
+    {{ _("No budget entries found. Add e.g.:") }}
+    <code>custom "budget" Expenses:Food "monthly" 400.00 CNY</code>
+  </p>
+  {% endif %}
+</div>
+
+<style>
+.budget { max-width: 60rem; margin: 1rem auto; font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; }
+.budget-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+.budget-head h2 { margin: 0; font-size: 1.25rem; }
+.budget-windows a { margin-left: .75rem; font-size: .85rem; text-decoration: none; color: #2a6496; }
+.budget-windows a.selected { font-weight: 700; color: #1a3d5c; border-bottom: 2px solid #1a3d5c; }
+.budget-period { font-size: .85rem; color: #666; margin: .35rem 0 .9rem; }
+.budget-hint { margin-left: .6rem; color: #999; }
+.budget-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.budget-table th { text-align: left; padding: .45rem .6rem; background: #f2f5f8; border-bottom: 1px solid #dde3e9; font-weight: 600; }
+.budget-table td { padding: .4rem .6rem; border-bottom: 1px solid #eef1f4; }
+.budget-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.budget-table .account { text-align: left; white-space: nowrap; }
+.budget-table .used { width: 12rem; }
+.budget-table .bar { display: inline-block; vertical-align: middle; width: 6rem; height: .5rem; background: #e8edf2; border-radius: 3px; overflow: hidden; margin-right: .45rem; }
+.budget-table .bar span { display: block; height: 100%; background: #4a90c2; }
+.budget-table .pct { vertical-align: middle; font-variant-numeric: tabular-nums; color: #444; }
+.budget-table tr.over .bar span { background: #c0392b; }
+.budget-table tr.over .pct { color: #c0392b; font-weight: 600; }
+.budget-table .negative { color: #c0392b; }
+.budget-table tfoot .grand td { border-top: 2px solid #dde3e9; font-weight: 700; background: #fafbfc; }
+.budget-empty { color: #666; }
+</style>
+{% endblock %}
