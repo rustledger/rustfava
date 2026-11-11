@@ -22,12 +22,28 @@
 
   let { report, name, key, remote, bubble, children }: Props = $props();
 
-  let href = $derived(remote ? report : $urlFor(`${report}/`));
-  let selected = $derived(remote ? false : href.includes($pathname));
+  /** Whether this is an absolute URL to some other site. */
+  const is_external_url = (url: string): boolean =>
+    /^[a-z][a-z0-9+.-]*:/iu.test(url) || url.startsWith("//");
+
+  /**
+   * Whether this is a path on this instance, already prefixed.
+   *
+   * Such a page is rendered by the backend (like the help page), which the
+   * router handles by loading `?partial=true` and replacing `<article>` - so it
+   * must not be marked remote, or the click would reload the whole document.
+   */
+  const is_prefixed_path = (url: string): boolean => url.startsWith("/");
+
+  let external = $derived(remote === true || is_external_url(report));
+  let href = $derived(
+    external || is_prefixed_path(report) ? report : $urlFor(`${report}/`),
+  );
+  let selected = $derived(external ? false : href.includes($pathname));
 </script>
 
 <li>
-  <a class:selected {href} {@attach keyboardShortcut(key)} data-remote={remote}>
+  <a class:selected {href} {@attach keyboardShortcut(key)} data-remote={external ? true : undefined}>
     {name}
     {#if bubble && bubble[0] > 0}
       <span class="bubble" class:error={bubble[1] === "error"}>
